@@ -1,0 +1,20 @@
+{
+  "name": "local-coding-evals",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "run-scenario": "tsx src/index.ts",
+    "report": "tsx src/generate-report.ts && open results/index.html"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "latest",
+    "@earendil-works/pi-coding-agent": "latest",
+    "pi-mcp-adapter": "^2.10.0",
+    "pi-web-access": "^0.10.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}
