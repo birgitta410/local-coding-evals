@@ -5,7 +5,7 @@ import { spawnSync } from "child_process";
 import { runScenario } from "./runner.js";
 import { evaluate } from "./evaluator.js";
 import { detectAndStart, captureAfterState, stop as stopSensors } from "./sensors.js";
-import type { Scenario, RunResult } from "./types.js";
+import type { Scenario, RunResult, LmStudioModelConfig } from "./types.js";
 
 function formatDuration(ms: number): string {
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
@@ -56,6 +56,28 @@ function gitStash(codebasePath: string): boolean {
   return r.status === 0 && (r.stdout ?? "").includes("Saved");
 }
 
+async function fetchLmStudioModelConfig(
+  baseUrl: string,
+  modelId: string
+): Promise<LmStudioModelConfig | null> {
+  try {
+    const res = await fetch(`${baseUrl}/api/v1/models`);
+    if (!res.ok) return null;
+    const data = (await res.json()) as { models: any[] };
+    const model = data.models.find((m) => m.key === modelId);
+    if (!model) return null;
+    const instance = model.loaded_instances?.[0] ?? null;
+    return {
+      max_context_length: model.max_context_length,
+      params_string: model.params_string ?? null,
+      quantization: model.quantization ?? null,
+      loaded_instance_config: instance?.config ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function main() {
   const scenarioPath = process.argv[2];
   const evalOnly = process.argv.includes("--eval-only");
@@ -75,6 +97,18 @@ async function main() {
 
   const codebasePath = path.resolve(scenario.codebasePath);
 
+  let taskModelConfig: LmStudioModelConfig | undefined;
+  if (scenario.taskModel.baseUrl) {
+    const config = await fetchLmStudioModelConfig(scenario.taskModel.baseUrl, scenario.taskModel.model);
+    if (config) {
+      taskModelConfig = config;
+      const ctxLen = config.loaded_instance_config?.context_length ?? "not loaded";
+      console.log(`[lmstudio] context_length=${ctxLen} max_context_length=${config.max_context_length} params=${config.params_string ?? "?"}`);
+    } else {
+      console.log("[lmstudio] Could not fetch model config (non-LM Studio runtime or API unavailable)");
+    }
+  }
+
   let partial: Omit<RunResult, "evaluation" | "sensors">;
 
   if (evalOnly) {
@@ -88,6 +122,7 @@ async function main() {
       endTime: now,
       durationMs: 0,
       taskModel: scenario.taskModel,
+      taskModelConfig,
       evaluatorModel: scenario.evaluatorModel,
       conversation: [],
     };
@@ -126,13 +161,43 @@ async function main() {
     const sensors = detectAndStart(codebasePath);
     if (sensors.available) {
       console.log(`[sensors] available=${sensors.available} started=${sensors.started} snapshotted=${sensors.snapshotted}`);
+      if (sensors.started) {
+        console.log("[sensors] Waiting 5s before snapshot...");
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
     }
+
+    const restoreGit = () => {
+      if (scenario.gitSha && originalBranch) {
+        console.log(`\n[git] Restoring ${originalBranch}...`);
+        gitRun(codebasePath, ["checkout", originalBranch]);
+        if (stashed) {
+          console.log("[git] Popping stash...");
+          gitRun(codebasePath, ["stash", "pop"]);
+        }
+      }
+    };
 
     console.log("\n--- agent ---\n");
 
-    partial = await runScenario(scenario);
+    try {
+      partial = { ...await runScenario(scenario), taskModelConfig };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const stack = err instanceof Error && err.stack ? `\n${err.stack}` : "";
+      console.error(`\n[error] Task run failed: ${msg}${stack}`);
+      restoreGit();
+      process.exit(1);
+    }
 
     console.log(`\n\n--- done in ${formatDuration(partial.durationMs)} ---`);
+
+    const postTaskGit = checkGitState(codebasePath);
+    if (postTaskGit.clean) {
+      console.error("\n[error] Task run produced no file changes. Skipping evaluation.");
+      restoreGit();
+      process.exit(1);
+    }
 
     if (scenario.gitSha) {
       const ts = new Date(partial.startTime)
@@ -156,14 +221,27 @@ async function main() {
       stopSensors(codebasePath);
     }
 
-    if (scenario.gitSha && originalBranch) {
-      console.log(`\n[git] Restoring ${originalBranch}...`);
-      gitRun(codebasePath, ["checkout", originalBranch]);
-      if (stashed) {
-        console.log("[git] Popping stash...");
-        gitRun(codebasePath, ["stash", "pop"]);
-      }
-    }
+    restoreGit();
+
+    // Compute output path now so we can write preliminary and final to the same file.
+    const resultsDir = path.resolve("results");
+    fs.mkdirSync(resultsDir, { recursive: true });
+
+    const ts = new Date(partial.startTime)
+      .toISOString()
+      .replace(/[:.]/g, "-")
+      .replace("T", "_")
+      .slice(0, 19);
+    const outFile = path.join(resultsDir, `${scenario.name.replace(/\s+/g, "-")}_${ts}.json`);
+
+    // Collect changed files from the final git status (after all git ops).
+    const changedFiles = postTaskGit.summary
+      ? postTaskGit.summary.split("\n").map((l) => l.trim()).filter(Boolean)
+      : [];
+
+    const preliminary: RunResult = { ...partial, changedFiles, sensors: sensorsWithAfter };
+    fs.writeFileSync(outFile, JSON.stringify(preliminary, null, 2));
+    console.log(`\nPreliminary result saved: ${outFile}`);
 
     console.log("\n--- evaluating ---\n");
 
@@ -182,23 +260,52 @@ async function main() {
     console.log(`\n${verdict}  score=${evaluation.score.toFixed(2)}`);
     console.log(`Reasoning: ${evaluation.reasoning}`);
 
-    const result: RunResult = { ...partial, evaluation, sensors: sensorsWithAfter };
-
-    const resultsDir = path.resolve("results");
-    fs.mkdirSync(resultsDir, { recursive: true });
-
-    const ts = new Date(partial.startTime)
-      .toISOString()
-      .replace(/[:.]/g, "-")
-      .replace("T", "_")
-      .slice(0, 19);
-    const outFile = path.join(resultsDir, `${scenario.name.replace(/\s+/g, "-")}_${ts}.json`);
+    const result: RunResult = { ...preliminary, evaluation };
     fs.writeFileSync(outFile, JSON.stringify(result, null, 2));
     console.log(`\nSaved: ${outFile}`);
     return;
   }
 
-  // eval-only path: no sensors, no git ops, no saved result file
+  // eval-only path: find an existing result file to update
+  const evalResultsDir = path.resolve("results");
+  let evalTargetFile: string | null = null;
+
+  if (fs.existsSync(evalResultsDir)) {
+    const candidates = fs
+      .readdirSync(evalResultsDir)
+      .filter((f) => f.endsWith(".json"))
+      .sort()
+      .reverse();
+
+    for (const f of candidates) {
+      try {
+        const data = JSON.parse(
+          fs.readFileSync(path.join(evalResultsDir, f), "utf-8")
+        ) as RunResult;
+        if (
+          data.scenarioName === scenario.name &&
+          data.taskModel.model === scenario.taskModel.model
+        ) {
+          evalTargetFile = path.join(evalResultsDir, f);
+          break;
+        }
+      } catch {
+        // skip malformed files
+      }
+    }
+  }
+
+  if (!evalTargetFile) {
+    console.log("\n[eval-only] No existing result file found for this scenario + model. Results will not be saved.");
+  } else {
+    console.log(`\n[eval-only] Found result file: ${evalTargetFile}`);
+    const proceed = await confirm("Add evaluation results to this file? [y/N] ");
+    if (!proceed) {
+      console.log("Aborted.");
+      process.exit(0);
+    }
+  }
+
   console.log("\n--- evaluating ---\n");
 
   const evaluation = await evaluate(scenario);
@@ -206,6 +313,13 @@ async function main() {
   const verdict = evaluation.passed ? "PASS" : "FAIL";
   console.log(`\n${verdict}  score=${evaluation.score.toFixed(2)}`);
   console.log(`Reasoning: ${evaluation.reasoning}`);
+
+  if (evalTargetFile) {
+    const existing = JSON.parse(fs.readFileSync(evalTargetFile, "utf-8")) as RunResult;
+    const updated: RunResult = { ...existing, evaluation };
+    fs.writeFileSync(evalTargetFile, JSON.stringify(updated, null, 2));
+    console.log(`\nUpdated: ${evalTargetFile}`);
+  }
 }
 
 main().catch((err) => {

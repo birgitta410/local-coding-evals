@@ -50,6 +50,18 @@ export interface SensorsData {
   stateAfter: Record<string, SensorReading> | null;
 }
 
+export interface LmStudioModelConfig {
+  max_context_length: number;
+  params_string: string | null;
+  quantization: { name: string | null; bits_per_weight: number | null } | null;
+  loaded_instance_config: {
+    context_length: number;
+    eval_batch_size?: number;
+    parallel?: number;
+    flash_attention?: boolean;
+  } | null;
+}
+
 export interface RunResult {
   scenarioName: string;
   codebasePath: string;
@@ -59,8 +71,10 @@ export interface RunResult {
   endTime: number;
   durationMs: number;
   taskModel: ModelSpec;
+  taskModelConfig?: LmStudioModelConfig;
   evaluatorModel: ModelSpec;
   conversation: unknown[];
-  evaluation: EvalResult;
+  changedFiles?: string[];
+  evaluation?: EvalResult;
   sensors: SensorsData;
 }

@@ -130,6 +130,44 @@ const html = /* html */ `<!DOCTYPE html>
   .score-bar.pass { background: #22c55e; }
   .score-bar.fail { background: #ef4444; }
 
+  .sidebar-top {
+    padding: 10px 12px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    gap: 6px;
+    background: #f8fafc;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    flex-shrink: 0;
+  }
+  .group-btn {
+    flex: 1;
+    padding: 5px 0;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    background: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+  }
+  .group-btn:hover { background: #f1f5f9; }
+  .group-btn.active { background: #3b82f6; color: #fff; border-color: #2563eb; }
+  .group-label {
+    padding: 7px 16px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #e2e8f0;
+    background: #1a1a2e;
+    border-bottom: none;
+    position: sticky;
+    top: 45px;
+    z-index: 1;
+  }
+
   /* ── Detail panel ── */
   main {
     flex: 1;
@@ -403,7 +441,13 @@ const html = /* html */ `<!DOCTYPE html>
 </header>
 
 <div class="layout">
-  <aside id="sidebar"></aside>
+  <aside>
+    <div class="sidebar-top">
+      <button class="group-btn active" id="btn-model" onclick="setSidebarGroup('model')">By Model</button>
+      <button class="group-btn" id="btn-scenario" onclick="setSidebarGroup('scenario')">By Scenario</button>
+    </div>
+    <div id="sidebar-list"></div>
+  </aside>
 
   <main id="main">
     <div class="placeholder" id="placeholder">Select a run to view details</div>
@@ -433,26 +477,54 @@ function prettyJson(v) {
 }
 
 // ── Sidebar ──────────────────────────────────────────────
+let currentGroupBy = "model";
+let selectedRunIndex = -1;
+
+function renderRunItem(d, i) {
+  const pass = d.evaluation?.passed;
+  const score = d.evaluation?.score ?? 0;
+  const date = new Date(d.startTime).toLocaleString();
+  const turns = (d.conversation ?? []).length;
+  const model = d.taskModel?.model ?? "";
+  const active = i === selectedRunIndex;
+  return \`<div class="run-item\${active ? " active" : ""}" data-index="\${i}" onclick="selectRun(\${i})">
+    <div class="name">\${esc(d.scenarioName)}</div>
+    <div class="meta">
+      <span class="badge \${pass ? "pass" : "fail"}">\${pass ? "PASS" : "FAIL"}</span>
+      <span>\${(score * 100).toFixed(0)}%</span>
+      <span>\${fmt(d.durationMs)}</span>
+      <span>\${turns} turns</span>
+    </div>
+    <div class="score-bar-wrap">
+      <div class="score-bar \${pass ? "pass" : "fail"}" style="width:\${(score * 100).toFixed(1)}%"></div>
+    </div>
+    <div class="meta" style="margin-top:5px; font-size:10px;">\${esc(model)} &middot; \${esc(date)}</div>
+  </div>\`;
+}
+
 function buildSidebar() {
-  const aside = document.getElementById("sidebar");
-  aside.innerHTML = RUNS.map((r, i) => {
-    const d = r.data;
-    const pass = d.evaluation?.passed;
-    const score = d.evaluation?.score ?? 0;
-    const date = new Date(d.startTime).toLocaleString();
-    return \`<div class="run-item" data-index="\${i}" onclick="selectRun(\${i})">
-      <div class="name">\${esc(d.scenarioName)}</div>
-      <div class="meta">
-        <span class="badge \${pass ? "pass" : "fail"}">\${pass ? "PASS" : "FAIL"}</span>
-        <span>\${(score * 100).toFixed(0)}%</span>
-        <span>\${fmt(d.durationMs)}</span>
-      </div>
-      <div class="score-bar-wrap">
-        <div class="score-bar \${pass ? "pass" : "fail"}" style="width:\${(score * 100).toFixed(1)}%"></div>
-      </div>
-      <div class="meta" style="margin-top:5px; font-size:10px;">\${esc(date)}</div>
-    </div>\`;
-  }).join("");
+  const groupKey = (d) => currentGroupBy === "model"
+    ? (d.taskModel?.model ?? "unknown")
+    : d.scenarioName;
+
+  const groups = new Map();
+  RUNS.forEach((r, i) => {
+    const key = groupKey(r.data);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push({ d: r.data, i });
+  });
+
+  document.getElementById("sidebar-list").innerHTML = Array.from(groups.entries()).map(([key, items]) =>
+    \`<div class="group-label">\${esc(key)}</div>\` +
+    items.map(({ d, i }) => renderRunItem(d, i)).join("")
+  ).join("");
+}
+
+function setSidebarGroup(groupBy) {
+  currentGroupBy = groupBy;
+  document.getElementById("btn-model").classList.toggle("active", groupBy === "model");
+  document.getElementById("btn-scenario").classList.toggle("active", groupBy === "scenario");
+  buildSidebar();
 }
 
 // ── Detail ───────────────────────────────────────────────
@@ -491,12 +563,23 @@ function renderConversation(messages) {
         } else if (block.type === "tool_use") {
           return \`<div class="tool-block">
             <div class="tool-header">&#128295; \${esc(block.name)}</div>\${esc(prettyJson(block.input))}</div>\`;
+        } else if (block.type === "toolCall") {
+          return \`<div class="tool-block">
+            <div class="tool-header">&#128295; \${esc(block.name)}</div>\${esc(prettyJson(block.arguments))}</div>\`;
         } else if (block.type === "tool_result") {
           const inner = Array.isArray(block.content)
             ? block.content.map(c => c.text ?? "").join("\\n")
             : String(block.content ?? "");
           return \`<div class="tool-block" style="background:#1a2e1a; border-left: 3px solid #22c55e;">
-            <div class="tool-header" style="color:#86efac">&#10003; tool result</div>\${esc(inner)}</div>\`;
+            <div class="tool-header" style="color:#86efac; cursor:pointer; user-select:none" onclick="const b=this.nextElementSibling; const open=b.style.display!=='none'; b.style.display=open?'none':'block'; this.querySelector('.tr-chevron').style.transform=open?'':'rotate(90deg)'">&#10003; tool result <span class="tr-chevron" style="float:right; display:inline-block; transition:transform 0.2s">&#9656;</span></div>
+            <div style="display:none">\${esc(inner)}</div></div>\`;
+        } else if (block.type === "toolResult") {
+          const inner = Array.isArray(block.content)
+            ? block.content.map(c => c.text ?? "").join("\\n")
+            : String(block.result ?? block.content ?? "");
+          return \`<div class="tool-block" style="background:#1a2e1a; border-left: 3px solid #22c55e;">
+            <div class="tool-header" style="color:#86efac; cursor:pointer; user-select:none" onclick="const b=this.nextElementSibling; const open=b.style.display!=='none'; b.style.display=open?'none':'block'; this.querySelector('.tr-chevron').style.transform=open?'':'rotate(90deg)'">&#10003; tool result <span class="tr-chevron" style="float:right; display:inline-block; transition:transform 0.2s">&#9656;</span></div>
+            <div style="display:none">\${esc(inner)}</div></div>\`;
         } else {
           return \`<div class="msg-bubble">\${esc(JSON.stringify(block))}</div>\`;
         }
@@ -579,14 +662,20 @@ function renderSensors(sensors) {
 }
 
 function selectRun(index) {
-  document.querySelectorAll(".run-item").forEach((el, i) => {
-    el.classList.toggle("active", i === index);
+  selectedRunIndex = index;
+  document.querySelectorAll(".run-item").forEach(el => {
+    el.classList.toggle("active", parseInt(el.dataset.index) === index);
   });
 
   const r = RUNS[index].data;
   const pass = r.evaluation?.passed;
   const score = r.evaluation?.score ?? 0;
   const date = new Date(r.startTime).toLocaleString();
+  const turns = (r.conversation ?? []).length;
+  const toolCallCount = (r.conversation ?? []).reduce((n, msg) => {
+    if (!Array.isArray(msg.content)) return n;
+    return n + msg.content.filter(b => b.type === "tool_use" || b.type === "toolCall").length;
+  }, 0);
 
   document.getElementById("placeholder").style.display = "none";
 
@@ -598,6 +687,8 @@ function selectRun(index) {
         <div class="stats">
           <span><strong>Score</strong> \${(score * 100).toFixed(0)}%</span>
           <span><strong>Duration</strong> \${fmt(r.durationMs)}</span>
+          <span><strong>Turns</strong> \${turns}</span>
+          <span><strong>Tool calls</strong> \${toolCallCount}</span>
           <span><strong>Run at</strong> \${esc(date)}</span>
           <span><strong>Codebase</strong> \${esc(r.codebasePath)}</span>
         </div>
@@ -608,6 +699,12 @@ function selectRun(index) {
       <div class="model-card">
         <div class="label">Task model</div>
         <div class="value">\${esc(r.taskModel.provider + "/" + r.taskModel.model)}</div>
+        \${r.taskModelConfig ? \`<div style="margin-top:8px; font-size:11px; color:#475569; line-height:1.7">
+          \${r.taskModelConfig.loaded_instance_config ? \`<div><strong>Context (loaded):</strong> \${r.taskModelConfig.loaded_instance_config.context_length.toLocaleString()} tokens</div>\` : ""}
+          <div><strong>Context (max):</strong> \${r.taskModelConfig.max_context_length.toLocaleString()} tokens</div>
+          \${r.taskModelConfig.params_string ? \`<div><strong>Params:</strong> \${esc(r.taskModelConfig.params_string)}</div>\` : ""}
+          \${r.taskModelConfig.quantization?.name ? \`<div><strong>Quant:</strong> \${esc(r.taskModelConfig.quantization.name)}</div>\` : ""}
+        </div>\` : ""}
       </div>
       <div class="model-card">
         <div class="label">Evaluator model</div>
@@ -615,16 +712,15 @@ function selectRun(index) {
       </div>
     </div>\`)}
 
-    \${section("Prompt", \`<div class="prose">\${esc(r.prompt)}</div>\`)}
+    \${section("Prompt", \`<div class="prose">\${esc(r.prompt)}</div>\`, false)}
 
-    \${section("Expectation", \`<div class="prose">\${esc(r.expectation)}</div>\`)}
+    \${section("Expectation", \`<div class="prose">\${esc(r.expectation)}</div>\`, false)}
 
     \${section("Evaluation", \`
       <div class="prose" style="margin-bottom:16px; padding:12px 16px; background:\${pass ? "#f0fdf4" : "#fef2f2"}; border-radius:8px; border:1px solid \${pass ? "#bbf7d0" : "#fecaca"}">
         \${esc(r.evaluation?.reasoning ?? "No reasoning provided.")}
       </div>
-      <div style="font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; margin-bottom:10px;">Evaluator Tool Calls</div>
-      \${renderToolCalls(r.evaluation?.toolCalls)}
+      \${section("Evaluator Tool Calls", renderToolCalls(r.evaluation?.toolCalls), false)}
     \`)}
 
     \${section("Sensors", renderSensors(r.sensors))}

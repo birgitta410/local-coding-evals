@@ -20,11 +20,12 @@ const scenario: Scenario = {
 - Run the application with npm run dev
 - Use the Playwright MCP server tool to navigate to localhost:3000 (not in headless mode, but I want a browser to pop up)
 - It might need a login, in which case wait for 1 minute for the user to log you in, and then check again
-- Click on "Activity" for one of the spaces, then "Analyze"
-- Verify that the bar chart "Messages per poster" is sorted by number of messages, with highest bar first on the left
-- When you take a screenshot, make sure the full chart is visible, you might have to scroll down
-- Verify that the x-axis shows percentages of overall messages every 10th bar, instead of numbers
-- Verify that the percentages on the x-axis are coherent and make sense - usually, it should get to 50% quite early on, after just a few bars
+- Select the space "AI-assisted Software Delivery [AIFSD]" and click on "Activity" for it, then "Analyze" on the following page
+- Take a screenshot of the chart, make sure the full chart is visible, you might have to scroll down
+- Based on the visual screenshot, do some verification - don't look at the SVG, it will be too messy
+-> Verify that the bar chart "Messages per poster" is sorted by number of messages, with highest bar first on the left
+-> Verify that the x-axis shows percentages of overall messages every 10th bar, instead of numbers
+-> Verify that the percentages on the x-axis are coherent and make sense - usually, it should get to 50% quite early on, after just a few bars
 `.trim(),
 
   // Model used by Pi to perform the coding task
@@ -32,13 +33,15 @@ const scenario: Scenario = {
   taskModel: {
     provider: "lmstudio-tw",
     // model: "qwen/qwen3.6-35b-a3b",
-    model: "gemma-4-31b-it-mlx-4bit",
+    model: "google/gemma-4-31b",
+    // model: "qwen/qwen3-coder-next"
   },
 
   // Model used to evaluate whether the task succeeded
   evaluatorModel: {
     provider: "anthropic",
-    model: "claude-sonnet-4-6",
+    // model: "claude-sonnet-4-6",
+    model: "claude-haiku-4-5",
   },
 };
 
