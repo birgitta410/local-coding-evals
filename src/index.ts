@@ -179,9 +179,53 @@ async function main() {
   } else {
     const git = checkGitState(codebasePath);
 
+    // ── Cleanup state (all flags start false; each step flips its own flag) ──
     let originalBranch: string | null = null;
     let stashed = false;
+    let mcpJsonCopied = false;
+    let sensorsStarted = false;
+    let cleanupRan = false;
 
+    const targetMcpJson = path.join(codebasePath, ".mcp.json");
+
+    // Single idempotent cleanup — safe to call multiple times.
+    const cleanup = () => {
+      if (cleanupRan) return;
+      cleanupRan = true;
+
+      if (sensorsStarted) {
+        console.log("[sensors] Stopping sensors...");
+        stopSensors(codebasePath);
+      }
+
+      if (mcpJsonCopied && fs.existsSync(targetMcpJson)) {
+        console.log("[mcp] Removing copied .mcp.json from target codebase...");
+        fs.unlinkSync(targetMcpJson);
+      }
+
+      if (scenario.gitSha && originalBranch) {
+        console.log(`\n[git] Restoring ${originalBranch}...`);
+        gitRun(codebasePath, ["checkout", originalBranch]);
+        if (stashed) {
+          console.log("[git] Popping stash...");
+          gitRun(codebasePath, ["stash", "pop"]);
+        }
+      }
+    };
+
+    // Register cleanup to run on any process.exit() call (error paths, normal
+    // exits, etc.).  The 'exit' event fires synchronously before the process
+    // actually terminates, and our cleanup is entirely synchronous, so this is
+    // the most reliable hook available.
+    process.on("exit", cleanup);
+
+    // SIGINT (Ctrl+C) just routes through process.exit so the same handler fires.
+    process.once("SIGINT", () => {
+      console.log("\n[interrupted] Cleaning up...");
+      process.exit(130);
+    });
+
+    // ── Git setup ────────────────────────────────────────────────────────────
     if (scenario.gitSha) {
       originalBranch = gitCurrentBranch(codebasePath);
       if (!git.clean) {
@@ -195,7 +239,6 @@ async function main() {
       console.log(`[git] Checking out ${scenario.gitSha}...`);
       if (!gitRun(codebasePath, ["checkout", scenario.gitSha])) {
         console.error(`[git] Failed to checkout ${scenario.gitSha}.`);
-        if (stashed) gitRun(codebasePath, ["stash", "pop"]);
         process.exit(1);
       }
     } else if (!git.clean) {
@@ -208,26 +251,55 @@ async function main() {
       }
     }
 
+    // ── MCP / Playwright check ────────────────────────────────────────────────
+    const sourceMcpJson = path.resolve(".mcp.json");
+
+    if (fs.existsSync(targetMcpJson)) {
+      let hasPlaywright = false;
+      try {
+        const mcpConfig = JSON.parse(fs.readFileSync(targetMcpJson, "utf-8")) as {
+          mcpServers?: Record<string, unknown>;
+        };
+        hasPlaywright = !!mcpConfig?.mcpServers?.playwright;
+      } catch {
+        console.log("[mcp] Warning: could not parse .mcp.json in target codebase.");
+      }
+
+      if (hasPlaywright) {
+        console.log("[mcp] Playwright MCP server found in target .mcp.json ✓");
+      } else {
+        console.log(
+          "\n\x1b[33m[mcp] Warning: .mcp.json exists in the target codebase but does not" +
+            " have a Playwright MCP server configured.\x1b[0m"
+        );
+        console.log(
+          "[mcp] Without Playwright the agent will not have browser access during the eval." +
+            " Consider extending the file with the Playwright MCP server before continuing."
+        );
+        const proceed = await confirm("Continue without Playwright? [y/N] ");
+        if (!proceed) {
+          console.log("Aborted.");
+          process.exit(0);
+        }
+      }
+    } else {
+      console.log("[mcp] No .mcp.json found in target codebase — copying from eval harness...");
+      fs.copyFileSync(sourceMcpJson, targetMcpJson);
+      mcpJsonCopied = true;
+    }
+
+    // ── Sensors ───────────────────────────────────────────────────────────────
     const sensors = detectAndStart(codebasePath);
     if (sensors.available) {
       console.log(`[sensors] available=${sensors.available} started=${sensors.started} snapshotted=${sensors.snapshotted}`);
       if (sensors.started) {
+        sensorsStarted = true;
         console.log("[sensors] Waiting 5s before snapshot...");
         await new Promise((resolve) => setTimeout(resolve, 5000));
       }
     }
 
-    const restoreGit = () => {
-      if (scenario.gitSha && originalBranch) {
-        console.log(`\n[git] Restoring ${originalBranch}...`);
-        gitRun(codebasePath, ["checkout", originalBranch]);
-        if (stashed) {
-          console.log("[git] Popping stash...");
-          gitRun(codebasePath, ["stash", "pop"]);
-        }
-      }
-    };
-
+    // ── Run scenario ─────────────────────────────────────────────────────────
     console.log("\n--- agent ---\n");
 
     try {
@@ -236,7 +308,6 @@ async function main() {
       const msg = err instanceof Error ? err.message : String(err);
       const stack = err instanceof Error && err.stack ? `\n${err.stack}` : "";
       console.error(`\n[error] Task run failed: ${msg}${stack}`);
-      restoreGit();
       process.exit(1);
     }
 
@@ -258,7 +329,6 @@ async function main() {
     const postTaskGit = checkGitState(codebasePath);
     if (postTaskGit.clean) {
       console.error("\n[error] Task run produced no file changes. Skipping evaluation.");
-      restoreGit();
       process.exit(1);
     }
 
@@ -280,11 +350,6 @@ async function main() {
     }
 
     const sensorsWithAfter = captureAfterState(codebasePath, sensors);
-    if (sensors.started) {
-      stopSensors(codebasePath);
-    }
-
-    restoreGit();
 
     // Compute output path now so we can write preliminary and final to the same file.
     const resultsDir = path.resolve("results");
@@ -309,6 +374,11 @@ async function main() {
     console.log("\n--- evaluating ---\n");
 
     const evaluation = await evaluate(scenario);
+
+    // All resources have been captured and evaluation is complete — run cleanup
+    // now so that git, mcp, and sensors are fully restored before we finish.
+    // (idempotent: the 'exit' handler will be a no-op when the process ends)
+    cleanup();
 
     if (sensorsWithAfter.available && sensorsWithAfter.stateAfter) {
       console.log("\n--- sensors ---");
