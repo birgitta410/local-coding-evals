@@ -4,9 +4,6 @@ const scenario: Scenario = {
   // Unique name used as the result filename prefix
   name: "country-bar-chart",
 
-  // Absolute path to the codebase the agent will work in
-  codebasePath: "/Users/Shared/projects/websites/birgitta_info_gen",
-
   // What you want Pi to build -- be specific
   prompt: `
 We have now new data in our access log data, a new field "country"
@@ -30,18 +27,6 @@ We will only have to read and change this one file, don't worry about the rest o
 - If you can, look at the visual and see that it is displayed well, that the bars are contained in their visual area and not overlapping other elements, that the countries are sorted by number of requests, and that the chart is horizontal, not vertical.
 `.trim(),
 
-  // Model used by Pi to perform the coding task
-  // provider: "anthropic" | "openai" | "ollama" | ...  (whatever Pi supports)
-  taskModel: {
-    provider: "lmstudio-tw",
-    model: "qwen/qwen3.6-35b-a3b",
-  },
-
-  // Model used to evaluate whether the task succeeded
-  evaluatorModel: {
-    provider: "anthropic",
-    model: "claude-sonnet-4-6",
-  },
 };
 
 export default scenario;

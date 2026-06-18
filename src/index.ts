@@ -126,14 +126,26 @@ function parseModelFlag(flag: string, argv: string[]): Partial<ModelSpec> | null
   };
 }
 
+function parseStringFlag(flag: string, argv: string[]): string | null {
+  const idx = argv.indexOf(flag);
+  if (idx === -1) return null;
+  const value = argv[idx + 1];
+  if (!value || value.startsWith("--")) {
+    console.error(`Error: ${flag} requires a value`);
+    process.exit(1);
+  }
+  return value;
+}
+
 async function main() {
   const scenarioPath = process.argv[2];
   const evalOnly = process.argv.includes("--eval-only");
   const taskModelOverride = parseModelFlag("--task-model", process.argv);
   const evaluatorModelOverride = parseModelFlag("--evaluator-model", process.argv);
+  const codebasePathOverride = parseStringFlag("--codebase-path", process.argv);
 
   if (!scenarioPath) {
-    console.error("Usage: tsx src/index.ts <path-to-scenario.ts> [--eval-only] [--task-model provider/model] [--evaluator-model provider/model]");
+    console.error("Usage: tsx src/index.ts <path-to-scenario.ts> [--eval-only] [--task-model provider/model] [--evaluator-model provider/model] [--codebase-path path]");
     process.exit(1);
   }
 
@@ -142,10 +154,11 @@ async function main() {
     ...scenarioBase,
     ...(taskModelOverride && { taskModel: { ...scenarioBase.taskModel, ...taskModelOverride } }),
     ...(evaluatorModelOverride && { evaluatorModel: { ...scenarioBase.evaluatorModel, ...evaluatorModelOverride } }),
+    ...(codebasePathOverride && { codebasePath: codebasePathOverride }),
   };
 
   console.log(`\n=== ${scenario.name} ===`);
-  console.log(`Codebase : ${scenario.codebasePath}`);
+  console.log(`Codebase : ${scenario.codebasePath}${codebasePathOverride ? " (overridden)" : ""}`);
   console.log(`Task     : ${scenario.taskModel.provider}/${scenario.taskModel.model}${taskModelOverride ? " (overridden)" : ""}`);
   console.log(`Evaluator: ${scenario.evaluatorModel.provider}/${scenario.evaluatorModel.model}${evaluatorModelOverride ? " (overridden)" : ""}`);
   if (evalOnly) console.log(`Mode     : eval-only (skipping task execution)`);

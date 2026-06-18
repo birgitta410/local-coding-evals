@@ -4,3 +4,4 @@ results/
 .sensors/
 .playwright-mcp
 *.png
+my-scenarios.md

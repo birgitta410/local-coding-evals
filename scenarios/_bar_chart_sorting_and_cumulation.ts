@@ -4,9 +4,6 @@ const scenario: Scenario = {
   // Unique name used as the result filename prefix
   name: "chativity-bar-chart",
 
-  // Absolute path to the codebase the agent will work in
-  codebasePath: "/Users/bboeckel/projects/tw/google-chat-stats/Google-Chat-Space-Activity-app",
-
   // What you want Pi to build -- be specific
   prompt: `I want to change the diagram in the frontend titled, "Messages per anonymous poster" 
 - It should be "per poster", not "anonymous" 
@@ -28,21 +25,6 @@ const scenario: Scenario = {
 -> Most importantly: Verify that the percentages on the x-axis are not only in the code, but also visible. And they should be coherent and make sense - usually, it should get to 50% quite early on, after just a few bars
 `.trim(),
 
-  // Model used by Pi to perform the coding task
-  // provider: "anthropic" | "openai" | "ollama" | ...  (whatever Pi supports)
-  taskModel: {
-    provider: "lmstudio-tw",
-    // model: "qwen/qwen3.6-35b-a3b",
-    model: "google/gemma-4-31b",
-    // model: "qwen/qwen3-coder-next"
-  },
-
-  // Model used to evaluate whether the task succeeded
-  evaluatorModel: {
-    provider: "anthropic",
-    // model: "claude-sonnet-4-6",
-    model: "claude-haiku-4-5",
-  },
 };
 
 export default scenario;
