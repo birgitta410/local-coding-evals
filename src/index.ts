@@ -6,7 +6,7 @@ import { spawnSync } from "child_process";
 import { runScenario } from "./runner.js";
 import { evaluate } from "./evaluator.js";
 import { detectAndStart, captureAfterState, stop as stopSensors } from "./sensors.js";
-import type { Scenario, RunResult, LmStudioModelConfig } from "./types.js";
+import type { Scenario, RunResult, LmStudioModelConfig, ModelSpec } from "./types.js";
 
 function formatDuration(ms: number): string {
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
@@ -107,21 +107,47 @@ async function fetchLmStudioModelConfig(
   }
 }
 
+function parseModelFlag(flag: string, argv: string[]): Partial<ModelSpec> | null {
+  const idx = argv.indexOf(flag);
+  if (idx === -1) return null;
+  const value = argv[idx + 1];
+  if (!value || value.startsWith("--")) {
+    console.error(`Error: ${flag} requires a value in the format provider/model`);
+    process.exit(1);
+  }
+  const slashIdx = value.indexOf("/");
+  if (slashIdx === -1) {
+    console.error(`Error: ${flag} value must be in the format provider/model`);
+    process.exit(1);
+  }
+  return {
+    provider: value.slice(0, slashIdx),
+    model: value.slice(slashIdx + 1),
+  };
+}
+
 async function main() {
   const scenarioPath = process.argv[2];
   const evalOnly = process.argv.includes("--eval-only");
+  const taskModelOverride = parseModelFlag("--task-model", process.argv);
+  const evaluatorModelOverride = parseModelFlag("--evaluator-model", process.argv);
 
   if (!scenarioPath) {
-    console.error("Usage: tsx src/index.ts <path-to-scenario.ts> [--eval-only]");
+    console.error("Usage: tsx src/index.ts <path-to-scenario.ts> [--eval-only] [--task-model provider/model] [--evaluator-model provider/model]");
     process.exit(1);
   }
 
-  const scenario: Scenario = (await import(path.resolve(scenarioPath))).default;
+  const scenarioBase: Scenario = (await import(path.resolve(scenarioPath))).default;
+  const scenario: Scenario = {
+    ...scenarioBase,
+    ...(taskModelOverride && { taskModel: { ...scenarioBase.taskModel, ...taskModelOverride } }),
+    ...(evaluatorModelOverride && { evaluatorModel: { ...scenarioBase.evaluatorModel, ...evaluatorModelOverride } }),
+  };
 
   console.log(`\n=== ${scenario.name} ===`);
   console.log(`Codebase : ${scenario.codebasePath}`);
-  console.log(`Task     : ${scenario.taskModel.provider}/${scenario.taskModel.model}`);
-  console.log(`Evaluator: ${scenario.evaluatorModel.provider}/${scenario.evaluatorModel.model}`);
+  console.log(`Task     : ${scenario.taskModel.provider}/${scenario.taskModel.model}${taskModelOverride ? " (overridden)" : ""}`);
+  console.log(`Evaluator: ${scenario.evaluatorModel.provider}/${scenario.evaluatorModel.model}${evaluatorModelOverride ? " (overridden)" : ""}`);
   if (evalOnly) console.log(`Mode     : eval-only (skipping task execution)`);
 
   const codebasePath = path.resolve(scenario.codebasePath);

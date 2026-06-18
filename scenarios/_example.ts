@@ -24,19 +24,20 @@ It should return JSON: { "message": "Hello, world!" } Then serve a simple HTML p
 `.trim(),
 
   // Model used by Pi to perform the coding task
+  // Define it here to always use the same, or pass to the application
+  // via --evaluator-model or --task-model to override
+
   // provider: "anthropic" | "openai" | "ollama" | ...  (whatever Pi supports)
   taskModel: {
-    provider: "lmstudio-tw",
-    // model: "qwen/qwen3.6-35b-a3b",
-    model: "google/gemma-4-12b-qat",
-    // model: "google/gemma-4-31b"
+  //   provider: "lmstudio",
+  //   model: "qwen/qwen3.6-35b-a3b",
   },
 
-  // Model used to evaluate whether the task succeeded
+  // // Model used to evaluate whether the task succeeded
   evaluatorModel: {
-    provider: "anthropic",
-    model: "claude-sonnet-4-6",
-  },
+  //   provider: "anthropic",
+  //   model: "claude-haiku-4-5",
+  }
 };
 
 export default scenario;
