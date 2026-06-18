@@ -24,6 +24,22 @@ if (runs.length === 0) {
   process.exit(1);
 }
 
+function extractScreenshotsFromFullOutput(fullOutput: string | undefined): string[] {
+  if (!fullOutput) return [];
+  for (const line of fullOutput.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('{"passed"')) {
+      try {
+        const parsed = JSON.parse(trimmed) as { screenshots?: string[] };
+        return (parsed.screenshots ?? []).filter((s) => typeof s === "string" && s.length > 0);
+      } catch {
+        return [];
+      }
+    }
+  }
+  return [];
+}
+
 function escHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -497,13 +513,20 @@ const html = /* html */ `<!DOCTYPE html>
 </div>
 
 <script>
-const RUNS = ${JSON.stringify(runs.map((r) => ({
-  file: r.file,
-  data: {
-    ...r.data,
-    _reasoningHtml: mdToHtml(r.data.evaluation?.fullOutput ?? r.data.evaluation?.reasoning ?? "No reasoning provided."),
-  },
-}))).replace(/<\//g, "<\\/")};
+const RUNS = ${JSON.stringify(runs.map((r) => {
+  const eval_ = r.data.evaluation;
+  const screenshots = (eval_?.screenshots && eval_.screenshots.length > 0)
+    ? eval_.screenshots
+    : extractScreenshotsFromFullOutput(eval_?.fullOutput);
+  return {
+    file: r.file,
+    data: {
+      ...r.data,
+      evaluation: eval_ ? { ...eval_, screenshots } : eval_,
+      _reasoningHtml: mdToHtml(eval_?.fullOutput ?? eval_?.reasoning ?? "No reasoning provided."),
+    },
+  };
+})).replace(/<\//g, "<\\/")};
 
 
 function fmt(ms) {
@@ -671,12 +694,6 @@ function imgError(img) {
   img.parentElement.appendChild(msg);
 }
 
-function extractPngPaths(text) {
-  if (!text) return [];
-  const matches = text.match(/[^ ]+[.]png/g) ?? [];
-  return [...new Set(matches)];
-}
-
 function renderScreenshots(paths) {
   if (!paths.length) return "";
   const imgs = paths.map(p => {
@@ -811,7 +828,7 @@ function selectRun(index) {
       <div style="margin-bottom:0">\${section("Expectation", \`<div class="prose">\${esc(r.expectation)}</div>\`, false)}</div>
     </div>
 
-    \${renderScreenshots(extractPngPaths(r.evaluation?.reasoning ?? ""))}
+    \${renderScreenshots(r.evaluation?.screenshots ?? [])}
 
     \${section("Evaluation", \`
       <div style="margin-bottom:16px; padding:12px 16px; background:\${pass ? "#f0fdf4" : "#fef2f2"}; border-radius:8px; border:1px solid \${pass ? "#bbf7d0" : "#fecaca"}; line-height:1.65; color:#334155">

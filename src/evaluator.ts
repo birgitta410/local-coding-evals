@@ -126,12 +126,13 @@ export async function evaluate(scenario: Scenario): Promise<EvalResult> {
   }
 
   if (jsonLine) {
-    const parsed = JSON.parse(jsonLine) as { passed: boolean; score: number; reasoning: string };
+    const parsed = JSON.parse(jsonLine) as { passed: boolean; score: number; reasoning: string; screenshots?: string[] };
     return {
       passed: parsed.passed,
       score: parsed.score,
       reasoning: parsed.reasoning,
       fullOutput: output,
+      screenshots: (parsed.screenshots ?? []).filter((s) => typeof s === "string" && s.length > 0),
       evaluatorModel: scenario.evaluatorModel,
       toolCalls,
     };

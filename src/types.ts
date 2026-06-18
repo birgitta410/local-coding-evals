@@ -32,6 +32,7 @@ export interface EvalResult {
   score: number;
   reasoning: string;
   fullOutput?: string;
+  screenshots?: string[];
   evaluatorModel: ModelSpec;
   toolCalls: ToolCall[];
 }
