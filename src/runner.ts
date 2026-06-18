@@ -104,6 +104,7 @@ export async function runScenario(scenario: Scenario): Promise<Omit<RunResult, "
   }
 
   const endTime = Date.now();
+  const stats = session.getSessionStats();
   session.dispose();
 
   return {
@@ -117,5 +118,6 @@ export async function runScenario(scenario: Scenario): Promise<Omit<RunResult, "
     taskModel: scenario.taskModel,
     evaluatorModel: scenario.evaluatorModel,
     conversation: session.agent.state.messages,
+    tokenUsage: stats.tokens,
   };
 }

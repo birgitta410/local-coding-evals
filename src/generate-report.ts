@@ -800,6 +800,7 @@ function selectRun(index) {
           <span><strong>Duration</strong> \${fmt(r.durationMs)}</span>
           <span><strong>Turns</strong> \${turns}</span>
           <span><strong>Tool calls</strong> \${toolCallCount}</span>
+          \${r.tokenUsage ? \`<span><strong>Tokens</strong> \${r.tokenUsage.total.toLocaleString()} (in: \${r.tokenUsage.input.toLocaleString()}, out: \${r.tokenUsage.output.toLocaleString()})</span>\` : ""}
           <span><strong>Run at</strong> \${esc(date)}</span>
           <span><strong>Codebase</strong> \${esc(r.codebasePath)}</span>
         </div>

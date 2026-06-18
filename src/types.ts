@@ -64,6 +64,14 @@ export interface LmStudioModelConfig {
   } | null;
 }
 
+export interface TokenUsage {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  total: number;
+}
+
 export interface RunResult {
   scenarioName: string;
   codebasePath: string;
@@ -77,6 +85,7 @@ export interface RunResult {
   evaluatorModel: ModelSpec;
   conversation: unknown[];
   changedFiles?: string[];
+  tokenUsage?: TokenUsage;
   evaluation?: EvalResult;
   sensors: SensorsData;
 }
