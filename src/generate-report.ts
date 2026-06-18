@@ -485,7 +485,6 @@ function renderRunItem(d, i) {
   const score = d.evaluation?.score ?? 0;
   const date = new Date(d.startTime).toLocaleString();
   const turns = (d.conversation ?? []).length;
-  const failedTools = d.failedToolCalls ?? 0;
   const model = d.taskModel?.model ?? "";
   const active = i === selectedRunIndex;
   return \`<div class="run-item\${active ? " active" : ""}" data-index="\${i}" onclick="selectRun(\${i})">
@@ -495,7 +494,6 @@ function renderRunItem(d, i) {
       <span>\${(score * 100).toFixed(0)}%</span>
       <span>\${fmt(d.durationMs)}</span>
       <span>\${turns} turns</span>
-      \${failedTools > 0 ? \`<span style="color:#dc2626; font-weight:700">\${failedTools} err\${failedTools !== 1 ? "s" : ""}</span>\` : ""}
     </div>
     <div class="score-bar-wrap">
       <div class="score-bar \${pass ? "pass" : "fail"}" style="width:\${(score * 100).toFixed(1)}%"></div>
@@ -617,6 +615,52 @@ function renderToolCalls(toolCalls) {
 }
 
 function expand(el) { el.classList.toggle("expanded"); }
+function imgError(img) {
+  img.style.display = "none";
+  const msg = document.createElement("span");
+  msg.style.cssText = "font-size:12px; color:#dc2626";
+  msg.textContent = "Could not load: " + img.src;
+  img.parentElement.appendChild(msg);
+}
+
+function extractPngPaths(text) {
+  if (!text) return [];
+  const matches = text.match(/[^ ]+[.]png/g) ?? [];
+  return [...new Set(matches)];
+}
+
+function renderScreenshots(paths) {
+  if (!paths.length) return "";
+  const imgs = paths.map(p => {
+    const src = p.startsWith("/") ? \`file://\${p}\` : p;
+    return \`<div style="margin-bottom:10px">
+      <div style="font-size:11px; color:#94a3b8; margin-bottom:4px; font-family:'SF Mono',monospace">\${esc(p)}</div>
+      <img src="\${esc(src)}" alt="\${esc(p)}" style="max-width:100%; border-radius:6px; border:1px solid #e2e8f0; display:block" onerror="imgError(this)">
+    </div>\`;
+  }).join("");
+  return \`<div style="margin-bottom:20px">\${imgs}</div>\`;
+}
+
+function renderToolSummary(messages) {
+  const allBlocks = (messages ?? []).flatMap(msg =>
+    Array.isArray(msg.content) ? msg.content : []
+  );
+  const toolBlocks = allBlocks.filter(b => b.type === "tool_use" || b.type === "toolCall");
+  if (!toolBlocks.length) return "<em style='color:#94a3b8'>No tool calls recorded.</em>";
+  const counts = {};
+  toolBlocks.forEach(b => {
+    const name = b.name ?? "unknown";
+    counts[name] = (counts[name] ?? 0) + 1;
+  });
+  const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([name, count]) =>
+    \`<tr><td><span class="tool-name">\${esc(name)}</span></td><td style="text-align:right; font-weight:600; padding-right:14px">\${count}</td></tr>\`
+  ).join("");
+  return \`<div style="margin-bottom:12px; font-size:13px; color:#475569"><strong>\${toolBlocks.length}</strong> total call\${toolBlocks.length !== 1 ? "s" : ""}</div>
+    <table class="tool-table">
+      <thead><tr><th>Tool</th><th style="text-align:right">Calls</th></tr></thead>
+      <tbody>\${rows}</tbody>
+    </table>\`;
+}
 
 function renderSensors(sensors) {
   if (!sensors?.available) return \`<div class="sensors-unavailable">Sensors not configured for this codebase.</div>\`;
@@ -691,12 +735,13 @@ function selectRun(index) {
           <span><strong>Duration</strong> \${fmt(r.durationMs)}</span>
           <span><strong>Turns</strong> \${turns}</span>
           <span><strong>Tool calls</strong> \${toolCallCount}</span>
-          \${(r.failedToolCalls ?? 0) > 0 ? \`<span style="color:#dc2626"><strong>Tool errors</strong> \${r.failedToolCalls}</span>\` : \`<span><strong>Tool errors</strong> 0</span>\`}
           <span><strong>Run at</strong> \${esc(date)}</span>
           <span><strong>Codebase</strong> \${esc(r.codebasePath)}</span>
         </div>
       </div>
     </div>
+
+    \${renderScreenshots(extractPngPaths(r.evaluation?.reasoning ?? ""))}
 
     \${section("Models", \`<div class="models-grid">
       <div class="model-card">
@@ -728,7 +773,10 @@ function selectRun(index) {
 
     \${section("Sensors", renderSensors(r.sensors))}
 
-    \${section("Conversation", renderConversation(r.conversation), false)}
+    \${section("Task run",
+      section("Tool Calls", renderToolSummary(r.conversation), true) +
+      section("Conversation", renderConversation(r.conversation), false),
+    false)}
   \`;
 }
 

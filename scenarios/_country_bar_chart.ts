@@ -26,6 +26,8 @@ We will only have to read and change this one file, don't worry about the rest o
   expectation: `
 - extract-timeline.mjs has code to implement a horizontal bar chart showing the number of requests per country
 - Running "./access show" generates an HTML file that contains this bar chart
+- Open that HTML file and take a screenshot of the chart. You might have to scroll first to have the full chart visible in the viewport. Reference that screenshot path in your evaluation summary.
+- If you can, look at the visual and see that it is displayed well, that the bars are contained in their visual area and not overlapping other elements, that the countries are sorted by number of requests, and that the chart is horizontal, not vertical.
 `.trim(),
 
   // Model used by Pi to perform the coding task

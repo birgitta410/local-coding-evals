@@ -21,11 +21,11 @@ const scenario: Scenario = {
 - Use the Playwright MCP server tool to navigate to localhost:3000 (not in headless mode, but I want a browser to pop up)
 - It might need a login, in which case wait for 1 minute for the user to log you in, and then check again
 - Select the space "AI-assisted Software Delivery [AIFSD]" and click on "Activity" for it, then "Analyze" on the following page
-- Take a screenshot of the chart, make sure the full chart is visible, you might have to scroll down
+- Take a screenshot of the chart, make sure the full chart is visible, you might have to scroll down. Store the screenshot file and reference it in your evaluation summary so that the user can look at it
 - Based on the visual screenshot, do some verification - don't look at the SVG, it will be too messy
 -> Verify that the bar chart "Messages per poster" is sorted by number of messages, with highest bar first on the left
 -> Verify that the x-axis shows percentages of overall messages every 10th bar, instead of numbers
--> Verify that the percentages on the x-axis are coherent and make sense - usually, it should get to 50% quite early on, after just a few bars
+-> Most importantly: Verify that the percentages on the x-axis are not only in the code, but also visible. And they should be coherent and make sense - usually, it should get to 50% quite early on, after just a few bars
 `.trim(),
 
   // Model used by Pi to perform the coding task
