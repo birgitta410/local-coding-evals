@@ -36,7 +36,7 @@ always use an absolute path to the screenshot here under ${evalsDirPath}/results
 
 After your investigation, output a single line of JSON in exactly this format
 (nothing else on that line):
-{"passed": true, "score": 1.0, "reasoning": "..."}
+{"passed": true, "score": 1.0, "reasoning": "...", "screenshots": ["...absolute paths to any screenshot files generated during evaluation...", ""]}
 
 score must be a float between 0.0 and 1.0.`;
 }
@@ -131,6 +131,7 @@ export async function evaluate(scenario: Scenario): Promise<EvalResult> {
       passed: parsed.passed,
       score: parsed.score,
       reasoning: parsed.reasoning,
+      fullOutput: output,
       evaluatorModel: scenario.evaluatorModel,
       toolCalls,
     };

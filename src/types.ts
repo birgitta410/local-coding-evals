@@ -31,6 +31,7 @@ export interface EvalResult {
   passed: boolean;
   score: number;
   reasoning: string;
+  fullOutput?: string;
   evaluatorModel: ModelSpec;
   toolCalls: ToolCall[];
 }
