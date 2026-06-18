@@ -11,29 +11,25 @@ Working directory: ${codebasePath}
 Expected outcome:
 ${expectation}
 
-Use whatever tools are available to verify whether the expected outcome has been met. \
+Use whatever tools are available to verify whether the expected outcome has been met.
 Be thorough.
 
-If the expectation requires checking a running app in a browser, use the playwright \
-tools directly (e.g. playwright_navigate, playwright_screenshot, playwright_click). \
-These are available as direct tools.
+If the expectation requires checking a running app in a browser, use the playwright
+tools directly (e.g. playwright_navigate, playwright_screenshot, playwright_click).
+These are available as direct tools. When you take screenshots, ask Playwright to save them
+under ./results where we're also storing our reports. Add timestamps to screenshot file names 
+and reference all full screenshot file paths in your evaluation reasoning.
 
-IMPORTANT for screenshots: Playwright saves screenshot files relative to THIS eval runner's \
-working directory, which is ${evalsDirPath} -- NOT relative to the codebase working directory. \
-When you take a screenshot, always use an absolute path under ${evalsDirPath} as the filename \
-(e.g. "${evalsDirPath}/screenshot-<timestamp>.png"). \
-When you subsequently read a screenshot file back to examine it, use that same absolute path. \
-Add timestamps to screenshot file names and reference the screenshot path in your evaluation \
-summary if relevant.
+IMPORTANT for visual verification: You are a vision-capable model. When you read a screenshot
+file back, you will receive the actual image and can see it directly. Use that visual
+interpretation to evaluate chart appearance, labels, ordering, colors, etc. Do NOT attempt to
+verify visual properties by inspecting DOM or SVG elements -- the chart library may render
+labels into canvas or use techniques that make DOM inspection unreliable. Screenshots are the
+authoritative source for visual verification. As the screenshots will go into this folder, NOT relative to the 
+codebase working directory where you will be working, when you want to read a screenshot, 
+always use an absolute path to the screenshot here under ${evalsDirPath}/results.
 
-IMPORTANT for visual verification: You are a vision-capable model. When you read a screenshot \
-file back, you will receive the actual image and can see it directly. Use that visual \
-interpretation to evaluate chart appearance, labels, ordering, colors, etc. Do NOT attempt to \
-verify visual properties by inspecting DOM or SVG elements -- the chart library may render \
-labels into canvas or use techniques that make DOM inspection unreliable. Screenshots are the \
-authoritative source for visual verification.
-
-After your investigation, output a single line of JSON in exactly this format \
+After your investigation, output a single line of JSON in exactly this format
 (nothing else on that line):
 {"passed": true, "score": 1.0, "reasoning": "..."}
 
