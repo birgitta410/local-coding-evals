@@ -741,8 +741,6 @@ function selectRun(index) {
       </div>
     </div>
 
-    \${renderScreenshots(extractPngPaths(r.evaluation?.reasoning ?? ""))}
-
     \${section("Models", \`<div class="models-grid">
       <div class="model-card">
         <div class="label">Task model</div>
@@ -760,9 +758,12 @@ function selectRun(index) {
       </div>
     </div>\`)}
 
-    \${section("Prompt", \`<div class="prose">\${esc(r.prompt)}</div>\`, false)}
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; align-items:start">
+      <div style="margin-bottom:0">\${section("Prompt", \`<div class="prose">\${esc(r.prompt)}</div>\`, false)}</div>
+      <div style="margin-bottom:0">\${section("Expectation", \`<div class="prose">\${esc(r.expectation)}</div>\`, false)}</div>
+    </div>
 
-    \${section("Expectation", \`<div class="prose">\${esc(r.expectation)}</div>\`, false)}
+    \${renderScreenshots(extractPngPaths(r.evaluation?.reasoning ?? ""))}
 
     \${section("Evaluation", \`
       <div class="prose" style="margin-bottom:16px; padding:12px 16px; background:\${pass ? "#f0fdf4" : "#fef2f2"}; border-radius:8px; border:1px solid \${pass ? "#bbf7d0" : "#fecaca"}">
