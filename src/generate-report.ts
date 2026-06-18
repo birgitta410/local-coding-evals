@@ -485,6 +485,7 @@ function renderRunItem(d, i) {
   const score = d.evaluation?.score ?? 0;
   const date = new Date(d.startTime).toLocaleString();
   const turns = (d.conversation ?? []).length;
+  const failedTools = d.failedToolCalls ?? 0;
   const model = d.taskModel?.model ?? "";
   const active = i === selectedRunIndex;
   return \`<div class="run-item\${active ? " active" : ""}" data-index="\${i}" onclick="selectRun(\${i})">
@@ -494,6 +495,7 @@ function renderRunItem(d, i) {
       <span>\${(score * 100).toFixed(0)}%</span>
       <span>\${fmt(d.durationMs)}</span>
       <span>\${turns} turns</span>
+      \${failedTools > 0 ? \`<span style="color:#dc2626; font-weight:700">\${failedTools} err\${failedTools !== 1 ? "s" : ""}</span>\` : ""}
     </div>
     <div class="score-bar-wrap">
       <div class="score-bar \${pass ? "pass" : "fail"}" style="width:\${(score * 100).toFixed(1)}%"></div>
@@ -689,6 +691,7 @@ function selectRun(index) {
           <span><strong>Duration</strong> \${fmt(r.durationMs)}</span>
           <span><strong>Turns</strong> \${turns}</span>
           <span><strong>Tool calls</strong> \${toolCallCount}</span>
+          \${(r.failedToolCalls ?? 0) > 0 ? \`<span style="color:#dc2626"><strong>Tool errors</strong> \${r.failedToolCalls}</span>\` : \`<span><strong>Tool errors</strong> 0</span>\`}
           <span><strong>Run at</strong> \${esc(date)}</span>
           <span><strong>Codebase</strong> \${esc(r.codebasePath)}</span>
         </div>

@@ -33,6 +33,7 @@ export async function runScenario(scenario: Scenario): Promise<Omit<RunResult, "
     throw new Error(`Failed to create agent session (model: ${modelSpec}): ${msg}`, { cause: err });
   }
 
+  let failedToolCalls = 0;
   // track whether we're mid-line inside a thinking block so we can indent continuations
   let inThinking = false;
 
@@ -56,6 +57,7 @@ export async function runScenario(scenario: Scenario): Promise<Omit<RunResult, "
     } else if (event.type === "tool_execution_start") {
       process.stdout.write(`\n\x1b[33m[tool: ${event.toolName}]\x1b[0m ${JSON.stringify(event.args ?? {})}\n`);
     } else if (event.type === "tool_execution_end") {
+      if (event.isError) failedToolCalls++;
       const result = typeof event.result === "string"
         ? event.result.slice(0, 300)
         : JSON.stringify(event.result ?? "").slice(0, 300);
@@ -117,5 +119,6 @@ export async function runScenario(scenario: Scenario): Promise<Omit<RunResult, "
     taskModel: scenario.taskModel,
     evaluatorModel: scenario.evaluatorModel,
     conversation: session.agent.state.messages,
+    failedToolCalls,
   };
 }

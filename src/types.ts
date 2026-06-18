@@ -74,6 +74,7 @@ export interface RunResult {
   taskModelConfig?: LmStudioModelConfig;
   evaluatorModel: ModelSpec;
   conversation: unknown[];
+  failedToolCalls?: number;
   changedFiles?: string[];
   evaluation?: EvalResult;
   sensors: SensorsData;
