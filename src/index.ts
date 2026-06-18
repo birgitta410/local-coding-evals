@@ -1,5 +1,6 @@
 import * as path from "path";
 import * as fs from "fs";
+import * as os from "os";
 import * as readline from "readline";
 import { spawnSync } from "child_process";
 import { runScenario } from "./runner.js";
@@ -56,24 +57,52 @@ function gitStash(codebasePath: string): boolean {
   return r.status === 0 && (r.stdout ?? "").includes("Saved");
 }
 
+function readPiProviderBaseUrl(providerName: string): string | null {
+  const modelsJsonPath = path.join(os.homedir(), ".pi", "agent", "models.json");
+  try {
+    const raw = fs.readFileSync(modelsJsonPath, "utf-8");
+    const data = JSON.parse(raw) as { providers?: Record<string, { baseUrl?: string }> };
+    const providerConfig = data.providers?.[providerName];
+    if (!providerConfig?.baseUrl) return null;
+    // Strip trailing /v1 -- Pi appends it for OpenAI-compat, but LM Studio's management API lives at /api/v1/models
+    return providerConfig.baseUrl.replace(/\/v1\/?$/, "");
+  } catch {
+    return null;
+  }
+}
+
 async function fetchLmStudioModelConfig(
   baseUrl: string,
   modelId: string
 ): Promise<LmStudioModelConfig | null> {
+  const url = `${baseUrl}/api/v1/models`;
   try {
-    const res = await fetch(`${baseUrl}/api/v1/models`);
-    if (!res.ok) return null;
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.log(`[lmstudio] HTTP ${res.status} ${res.statusText} from ${url}`);
+      return null;
+    }
     const data = (await res.json()) as { models: any[] };
-    const model = data.models.find((m) => m.key === modelId);
-    if (!model) return null;
+    const models: any[] = data.models ?? [];
+    const model = models.find((m) => m.key === modelId);
+    if (!model) {
+      const keys = models.map((m) => m.key).join(", ") || "(none)";
+      console.log(`[lmstudio] Model key "${modelId}" not found. Available keys: ${keys}`);
+      return null;
+    }
     const instance = model.loaded_instances?.[0] ?? null;
+    if (!instance) {
+      console.log(`[lmstudio] Model "${modelId}" found but has no loaded instances — context_length will be unavailable`);
+    }
     return {
       max_context_length: model.max_context_length,
       params_string: model.params_string ?? null,
       quantization: model.quantization ?? null,
       loaded_instance_config: instance?.config ?? null,
     };
-  } catch {
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log(`[lmstudio] Failed to fetch model config from ${url}: ${msg}`);
     return null;
   }
 }
@@ -97,16 +126,12 @@ async function main() {
 
   const codebasePath = path.resolve(scenario.codebasePath);
 
-  let taskModelConfig: LmStudioModelConfig | undefined;
-  if (scenario.taskModel.baseUrl) {
-    const config = await fetchLmStudioModelConfig(scenario.taskModel.baseUrl, scenario.taskModel.model);
-    if (config) {
-      taskModelConfig = config;
-      const ctxLen = config.loaded_instance_config?.context_length ?? "not loaded";
-      console.log(`[lmstudio] context_length=${ctxLen} max_context_length=${config.max_context_length} params=${config.params_string ?? "?"}`);
-    } else {
-      console.log("[lmstudio] Could not fetch model config (non-LM Studio runtime or API unavailable)");
-    }
+  const lmStudioBaseUrl = scenario.taskModel.baseUrl
+    ?? readPiProviderBaseUrl(scenario.taskModel.provider);
+  if (!lmStudioBaseUrl) {
+    console.log("[lmstudio] Warning: baseUrl not set in scenario and provider not found in ~/.pi/agent/models.json, cannot request model config");
+  } else if (!scenario.taskModel.baseUrl) {
+    console.log(`[lmstudio] baseUrl resolved from Pi config for provider "${scenario.taskModel.provider}": ${lmStudioBaseUrl}`);
   }
 
   let partial: Omit<RunResult, "evaluation" | "sensors">;
@@ -122,7 +147,6 @@ async function main() {
       endTime: now,
       durationMs: 0,
       taskModel: scenario.taskModel,
-      taskModelConfig,
       evaluatorModel: scenario.evaluatorModel,
       conversation: [],
     };
@@ -181,7 +205,7 @@ async function main() {
     console.log("\n--- agent ---\n");
 
     try {
-      partial = { ...await runScenario(scenario), taskModelConfig };
+      partial = { ...await runScenario(scenario) };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       const stack = err instanceof Error && err.stack ? `\n${err.stack}` : "";
@@ -191,6 +215,19 @@ async function main() {
     }
 
     console.log(`\n\n--- done in ${formatDuration(partial.durationMs)} ---`);
+
+    let taskModelConfig: LmStudioModelConfig | undefined;
+    if (lmStudioBaseUrl) {
+      const config = await fetchLmStudioModelConfig(lmStudioBaseUrl, scenario.taskModel.model);
+      if (config) {
+        taskModelConfig = config;
+        const ctxLen = config.loaded_instance_config?.context_length ?? "not loaded";
+        console.log(`[lmstudio] context_length=${ctxLen} max_context_length=${config.max_context_length} params=${config.params_string ?? "?"}`);
+      } else {
+        console.log("[lmstudio] Could not fetch model config (non-LM Studio runtime or API unavailable)");
+      }
+    }
+    partial = { ...partial, taskModelConfig };
 
     const postTaskGit = checkGitState(codebasePath);
     if (postTaskGit.clean) {
