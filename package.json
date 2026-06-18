@@ -8,7 +8,8 @@
   },
   "dependencies": {
     "@earendil-works/pi-ai": "latest",
-    "@earendil-works/pi-coding-agent": "latest"
+    "@earendil-works/pi-coding-agent": "latest",
+    "playwright": "^1.49.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

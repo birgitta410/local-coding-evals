@@ -5,3 +5,5 @@ results/
 .playwright-mcp
 *.png
 my-scenarios.md
+**/.auth.json
+**/.browser-profile/

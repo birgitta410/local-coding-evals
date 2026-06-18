@@ -6,13 +6,18 @@ import type { Scenario, EvalResult, ToolCall } from "./types.js";
 function buildEvalPrompt(codebasePath: string, expectation: string, evalsDirPath: string): string {
   return `You are evaluating whether a coding task was completed successfully.
 
-Working directory: ${codebasePath}
+Working directory WORKING_DIR: ${codebasePath}
+Directory of the evaluation framework EVAL_DIR (for scenario specific tools and storing reports and other resources): ${evalsDirPath}
 
 Expected outcome:
 ${expectation}
 
 Use whatever tools are available to verify whether the expected outcome has been met.
 Be thorough.
+
+IMPORTANT: Assume the task FAILED until you find clear evidence it succeeded. Be skeptical.
+Do not let earlier text-based investigation override what you see in screenshots -- the screenshot
+is the ground truth for visual verification. If you cannot confirm something visually, mark it as failed.
 
 If the expectation requires checking a running app in a browser, use the playwright
 tools directly (e.g. playwright_navigate, playwright_screenshot, playwright_click).

@@ -15,11 +15,9 @@ const scenario: Scenario = {
   // The evaluator has full read/grep/bash access to the codebase.
   expectation: `
 - Run the application with npm run dev
-- Use the Playwright MCP server tool to navigate to localhost:3000 (not in headless mode, but I want a browser to pop up)
-- It might need a login, in which case wait for 1 minute for the user to log you in, and then check again
-- Select the space "AI-assisted Software Delivery [AIFSD]" and click on "Activity" for it, then "Analyze" on the following page
-- Take a screenshot of the chart, make sure the full chart is visible, you might have to scroll down. Store the screenshot file and reference it in your evaluation summary so that the user can look at it
-- Based on the visual screenshot, do some verification - don't look at the SVG, it will be too messy
+- Run this playwright script from the EVAL_DIR I told you about earlier: npx tsx scenarios/chativity-bar-chart/screenshot-bar-chart.ts It will exit with a message like this: 
+  Screenshot saved: /path/to/screenshot/bar-chart-2026-06-18T15-05-04-993Z.png
+- Read the screenshot file from that absolute path and do some verification - don't look at the SVG, it will be too messy. Be sure to mention the full path to the screenshot file in your evaluation reasoning summary.
 -> Verify that the bar chart "Messages per poster" is sorted by number of messages, with highest bar first on the left
 -> Verify that the x-axis shows percentages of overall messages every 10th bar, instead of numbers
 -> Most importantly: Verify that the percentages on the x-axis are not only in the code, but also visible. And they should be coherent and make sense - usually, it should get to 50% quite early on, after just a few bars
