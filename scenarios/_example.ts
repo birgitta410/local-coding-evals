@@ -5,7 +5,7 @@ const scenario: Scenario = {
   name: "example",
 
   // Absolute path to the codebase the agent will work in
-  codebasePath: "/Users/bboeckel/projects/tw/gen-ai/experiments/local-coding/test-app",
+  codebasePath: "./test-app",
 
   // Optional: checkout this git SHA before running the task.
   // After the task, changes are committed on a new eval branch, then the original branch is restored.
