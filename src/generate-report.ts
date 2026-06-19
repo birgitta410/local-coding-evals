@@ -472,6 +472,55 @@ const html = /* html */ `<!DOCTYPE html>
   .sensor-delta.unchanged { color: #94a3b8; }
   .sensors-unavailable { color: #94a3b8; font-style: italic; font-size: 13px; }
 
+  /* ── Scenario Overview ── */
+  .overview-item { border-left: 3px solid transparent; }
+  .overview-item:hover { background: #faf5ff; border-left-color: #8b5cf6; }
+  .overview-item.active { background: #f5f3ff; border-left: 3px solid #8b5cf6; }
+
+  .overview-header { margin-bottom: 20px; }
+  .ov-title { font-size: 20px; font-weight: 800; color: #1a1a2e; margin-bottom: 4px; }
+  .ov-subtitle { color: #64748b; font-size: 13px; }
+
+  .overview-summary {
+    display: flex; gap: 0; flex-wrap: wrap; margin-bottom: 20px;
+    background: #fff; border-radius: 10px;
+    border: 1px solid #e2e8f0; overflow: hidden;
+  }
+  .ov-stat {
+    text-align: center; padding: 14px 18px; flex: 1; min-width: 80px;
+    border-right: 1px solid #e2e8f0;
+  }
+  .ov-stat:last-child { border-right: none; }
+  .ov-stat-val { font-size: 20px; font-weight: 700; color: #1a1a2e; line-height: 1.2; }
+  .ov-stat-val.pass { color: #16a34a; }
+  .ov-stat-val.fail { color: #dc2626; }
+  .ov-stat-val.partial { color: #d97706; }
+  .ov-stat-label { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 3px; }
+
+  .ov-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .ov-th {
+    text-align: left; padding: 9px 14px; background: #f1f5f9;
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.05em; color: #475569; border-bottom: 2px solid #e2e8f0;
+    cursor: pointer; user-select: none; white-space: nowrap;
+  }
+  .ov-th:hover { background: #e2e8f0; color: #1a1a2e; }
+  .ov-th.active { color: #3b82f6; background: #eff6ff; border-bottom-color: #3b82f6; }
+  .ov-row { cursor: pointer; }
+  .ov-row td { padding: 10px 14px; border-bottom: 1px solid #f0f2f5; vertical-align: middle; }
+  .ov-row:hover td { background: #f8fafc; }
+  .ov-row:last-child td { border-bottom: none; }
+  .ov-model { font-size: 12px; line-height: 1.5; }
+  .ov-model strong { color: #1e40af; font-family: "SF Mono", monospace; font-size: 12px; }
+  .ov-date { font-size: 12px; color: #64748b; white-space: nowrap; }
+
+  .mini-bar {
+    display: inline-block; width: 52px; height: 6px;
+    background: #e2e8f0; border-radius: 3px; vertical-align: middle;
+    overflow: hidden; margin-right: 5px; flex-shrink: 0;
+  }
+  .mini-bar-fill { display: block; height: 100%; border-radius: 3px; }
+
   .tool-block {
     background: #1e1e3f;
     color: #a9b1d6;
@@ -551,6 +600,185 @@ function prettyJson(v) {
 let currentGroupBy = "model";
 let selectedRunIndex = -1;
 
+// ── Scenario Overview ─────────────────────────────────────
+let selectedOverviewScenario = null;
+let scenarioGroupKeys = [];
+let ovSortKey = "date";
+let ovSortDir = -1;
+
+function countToolCalls(conversation) {
+  return (conversation ?? []).reduce((n, msg) => {
+    if (!Array.isArray(msg.content)) return n;
+    return n + msg.content.filter(b => b.type === "tool_use" || b.type === "toolCall").length;
+  }, 0);
+}
+
+function miniBar(value, max, color) {
+  const pct = max > 0 ? Math.min(100, (value / max) * 100).toFixed(1) : 0;
+  return \`<span class="mini-bar"><span class="mini-bar-fill" style="width:\${pct}%;background:\${color || "#3b82f6"}"></span></span>\`;
+}
+
+function renderScenarioOverview(scenarioName) {
+  const base = RUNS.map((r, i) => ({ ...r, idx: i })).filter(r => r.data.scenarioName === scenarioName);
+  if (!base.length) return "<em>No runs found.</em>";
+
+  base.forEach(r => {
+    r._dur    = r.data.durationMs;
+    r._turns  = (r.data.conversation ?? []).length;
+    r._tc     = countToolCalls(r.data.conversation);
+    r._tok    = r.data.tokenUsage?.total    ?? 0;
+    r._tokIn  = r.data.tokenUsage?.input    ?? 0;
+    r._tokOut = r.data.tokenUsage?.output   ?? 0;
+    r._ctx    = r.data.contextUsage?.percent ?? null;
+    r._score  = r.data.evaluation?.score    ?? 0;
+    r._pass   = r.data.evaluation?.passed   ?? false;
+  });
+
+  const getVal = {
+    date:      r => r.data.startTime,
+    duration:  r => r._dur,
+    turns:     r => r._turns,
+    toolcalls: r => r._tc,
+    tokens:    r => r._tok,
+    context:   r => r._ctx ?? -1,
+    score:     r => r._score,
+    model:     r => r.data.taskModel?.model ?? "",
+  };
+  const cmpFn = getVal[ovSortKey] ?? getVal.date;
+  const sorted = [...base].sort((a, b) => {
+    const av = cmpFn(a), bv = cmpFn(b);
+    return (typeof av === "string" ? av.localeCompare(bv) : av - bv) * ovSortDir;
+  });
+
+  const maxDur = Math.max(...base.map(r => r._dur));
+  const minDur = Math.min(...base.map(r => r._dur));
+  const maxT   = Math.max(...base.map(r => r._turns), 1);
+  const maxTc  = Math.max(...base.map(r => r._tc),    1);
+  const maxTok = Math.max(...base.map(r => r._tok),   1);
+  const maxCtx = Math.max(...base.map(r => r._ctx ?? 0), 1);
+
+  const passCount = base.filter(r => r._pass).length;
+  const avgDur    = base.reduce((s, r) => s + r._dur,   0) / base.length;
+  const avgT      = base.reduce((s, r) => s + r._turns, 0) / base.length;
+  const tokArr    = base.filter(r => r._tok > 0);
+  const avgTok    = tokArr.length ? tokArr.reduce((s, r) => s + r._tok, 0) / tokArr.length : 0;
+  const ctxArr    = base.filter(r => r._ctx != null);
+  const avgCtx    = ctxArr.length ? ctxArr.reduce((s, r) => s + r._ctx, 0) / ctxArr.length : 0;
+  const bestScore = Math.max(...base.map(r => r._score));
+  const passRateCls = passCount === base.length ? "pass" : passCount === 0 ? "fail" : "partial";
+
+  const statCards = [
+    { v: base.length,                          label: "Runs" },
+    { v: passCount + "/" + base.length,        label: "Passed",       cls: passRateCls },
+    { v: (bestScore * 100).toFixed(0) + "%",   label: "Best Score" },
+    { v: fmt(avgDur),                          label: "Avg Duration" },
+    { v: fmt(minDur),                          label: "Fastest" },
+    { v: fmt(maxDur),                          label: "Slowest" },
+    { v: avgT.toFixed(1),                      label: "Avg Turns" },
+    ...(avgTok > 0 ? [{ v: Math.round(avgTok).toLocaleString(), label: "Avg Tokens" }]  : []),
+    ...(avgCtx > 0 ? [{ v: avgCtx.toFixed(1) + "%",            label: "Avg Ctx Fill" }] : []),
+  ];
+
+  function th(key, label) {
+    const active = ovSortKey === key;
+    const arrow  = active ? (ovSortDir === -1 ? " ↓" : " ↑") : "";
+    return \`<th class="ov-th\${active ? " active" : ""}" onclick="ovSort('\${key}')" title="Sort by \${label}">\${label}\${arrow}</th>\`;
+  }
+
+  const rows = sorted.map(r => {
+    const pass = r._pass, score = r._score, dur = r._dur;
+    const t    = r._turns, tc   = r._tc;
+    const tok  = r._tok,   ctx  = r._ctx;
+    const model    = r.data.taskModel?.model    ?? "";
+    const provider = r.data.taskModel?.provider ?? "";
+    const date     = new Date(r.data.startTime).toLocaleString();
+    const ctxWin   = r.data.contextUsage?.contextWindow;
+
+    const durColor = base.length > 1
+      ? (dur === minDur ? "#22c55e" : dur === maxDur ? "#ef4444" : "#3b82f6")
+      : "#3b82f6";
+    const ctxColor = ctx != null
+      ? (ctx > 80 ? "#ef4444" : ctx > 60 ? "#f59e0b" : "#22c55e")
+      : "#3b82f6";
+
+    const tokCell = tok > 0
+      ? miniBar(tok, maxTok) + tok.toLocaleString()
+        + \`<br><span style="color:#94a3b8;font-size:11px">↑ \${r._tokIn.toLocaleString()} / ↓ \${r._tokOut.toLocaleString()}</span>\`
+      : \`<span style="color:#94a3b8">—</span>\`;
+
+    const ctxCell = ctx != null
+      ? miniBar(ctx, maxCtx, ctxColor) + ctx.toFixed(1) + "%"
+        + (ctxWin ? \` <span style="color:#94a3b8;font-size:10px">/ \${ctxWin.toLocaleString()}</span>\` : "")
+      : \`<span style="color:#94a3b8">—</span>\`;
+
+    return \`<tr class="ov-row" onclick="selectRun(\${r.idx})">
+      <td><div class="ov-model">
+        <span style="font-size:10px;color:#94a3b8">\${esc(provider)}</span><br>
+        <strong>\${esc(model)}</strong>
+      </div></td>
+      <td class="ov-date">\${esc(date)}</td>
+      <td style="white-space:nowrap">
+        <span class="badge \${pass ? "pass" : "fail"}">\${pass ? "PASS" : "FAIL"}</span>
+        <span style="margin-left:6px;color:#64748b;font-size:12px">\${(score * 100).toFixed(0)}%</span>
+      </td>
+      <td style="white-space:nowrap">\${miniBar(dur, maxDur, durColor)}\${fmt(dur)}</td>
+      <td style="white-space:nowrap">\${miniBar(t,   maxT)}\${t}</td>
+      <td style="white-space:nowrap">\${miniBar(tc,  maxTc)}\${tc}</td>
+      <td>\${tokCell}</td>
+      <td style="white-space:nowrap">\${ctxCell}</td>
+    </tr>\`;
+  }).join("");
+
+  return \`<div class="overview-header">
+    <h2 class="ov-title">\${esc(scenarioName)}</h2>
+    <p class="ov-subtitle">\${base.length} run\${base.length !== 1 ? "s" : ""} &middot; click a row to view full run details</p>
+  </div>
+  <div class="overview-summary">\${statCards.map(c =>
+    \`<div class="ov-stat">
+      <div class="ov-stat-val\${c.cls ? " " + c.cls : ""}">\${c.v}</div>
+      <div class="ov-stat-label">\${c.label}</div>
+    </div>\`
+  ).join("")}</div>
+  <div class="section" style="margin-bottom:0">
+    <div class="section-header open" onclick="toggleSection(this,'ov-tbl')">
+      Runs Comparison
+      <span style="font-size:11px;color:#94a3b8;font-weight:400;margin-left:6px">&#8597; click headers to sort</span>
+      <span class="chevron">&#9656;</span>
+    </div>
+    <div class="section-body" id="ov-tbl" style="padding:0;overflow-x:auto">
+      <table class="ov-table">
+        <thead><tr>
+          \${th("model","Model")}\${th("date","Date")}\${th("score","Result")}
+          \${th("duration","Duration")}\${th("turns","Turns")}\${th("toolcalls","Tool Calls")}
+          \${th("tokens","Tokens")}\${th("context","Context Fill")}
+        </tr></thead>
+        <tbody>\${rows}</tbody>
+      </table>
+    </div>
+  </div>\`;
+}
+
+function selectOverview(groupIndex) {
+  const scenarioName = scenarioGroupKeys[groupIndex];
+  if (scenarioName == null) return;
+  selectedOverviewScenario = scenarioName;
+  selectedRunIndex = -1;
+  document.querySelectorAll(".run-item").forEach(el => el.classList.remove("active"));
+  document.querySelectorAll(".overview-item[data-gi]").forEach(el => {
+    el.classList.toggle("active", +el.dataset.gi === groupIndex);
+  });
+  document.getElementById("placeholder").style.display = "none";
+  document.getElementById("details").innerHTML = renderScenarioOverview(scenarioName);
+}
+
+function ovSort(key) {
+  if (ovSortKey === key) ovSortDir *= -1;
+  else { ovSortKey = key; ovSortDir = -1; }
+  if (selectedOverviewScenario != null) {
+    document.getElementById("details").innerHTML = renderScenarioOverview(selectedOverviewScenario);
+  }
+}
+
 function renderRunItem(d, i) {
   const pass = d.evaluation?.passed;
   const score = d.evaluation?.score ?? 0;
@@ -585,10 +813,21 @@ function buildSidebar() {
     groups.get(key).push({ d: r.data, i });
   });
 
-  document.getElementById("sidebar-list").innerHTML = Array.from(groups.entries()).map(([key, items]) =>
-    \`<div class="group-label">\${esc(key)}</div>\` +
-    items.map(({ d, i }) => renderRunItem(d, i)).join("")
-  ).join("");
+  const groupsArr = Array.from(groups.entries());
+  if (currentGroupBy === "scenario") {
+    scenarioGroupKeys = groupsArr.map(([key]) => key);
+  }
+
+  document.getElementById("sidebar-list").innerHTML = groupsArr.map(([key, items], gi) => {
+    const ovItem = currentGroupBy === "scenario"
+      ? \`<div class="run-item overview-item\${selectedOverviewScenario === key ? " active" : ""}" data-gi="\${gi}" onclick="selectOverview(\${gi})">
+          <div class="name">&#8862; Overview &amp; Compare</div>
+          <div class="meta">\${items.length} run\${items.length !== 1 ? "s" : ""} &middot; all models</div>
+        </div>\`
+      : "";
+    return \`<div class="group-label">\${esc(key)}</div>\` + ovItem +
+      items.map(({ d, i }) => renderRunItem(d, i)).join("");
+  }).join("");
 }
 
 function setSidebarGroup(groupBy) {
@@ -773,6 +1012,7 @@ function renderSensors(sensors) {
 }
 
 function selectRun(index) {
+  selectedOverviewScenario = null;
   selectedRunIndex = index;
   document.querySelectorAll(".run-item").forEach(el => {
     el.classList.toggle("active", parseInt(el.dataset.index) === index);
