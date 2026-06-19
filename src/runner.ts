@@ -1,8 +1,76 @@
 import { AuthStorage, createAgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
-import { execSync } from "child_process";
+import { execSync, spawnSync } from "child_process";
+import * as fs from "fs";
 import * as path from "path";
 import { resolveModel } from "./model-resolver.js";
-import type { Scenario, RunResult } from "./types.js";
+import type { Scenario, RunResult, GitChangeSummary, GitFileChange } from "./types.js";
+
+function collectGitChanges(codebasePath: string): GitChangeSummary {
+  const statusResult = spawnSync("git", ["status", "--porcelain"], {
+    cwd: codebasePath, encoding: "utf-8",
+  });
+  const statusLines = (statusResult.stdout ?? "").trim().split("\n").filter(Boolean);
+
+  // numstat gives "<additions>\t<deletions>\t<path>" for tracked changes (- for binary)
+  const numstatResult = spawnSync("git", ["diff", "--numstat"], {
+    cwd: codebasePath, encoding: "utf-8",
+  });
+  const numstatMap = new Map<string, { additions: number | null; deletions: number | null }>();
+  for (const line of (numstatResult.stdout ?? "").trim().split("\n").filter(Boolean)) {
+    const [add, del, ...pathParts] = line.split("\t");
+    const filePath = pathParts.join("\t");
+    numstatMap.set(filePath, {
+      additions: add === "-" ? null : parseInt(add, 10),
+      deletions: del === "-" ? null : parseInt(del, 10),
+    });
+  }
+
+  const files: GitFileChange[] = [];
+  for (const line of statusLines) {
+    const xy = line.slice(0, 2);
+    const filePath = line.slice(3);
+    let status: GitFileChange["status"];
+    if (xy === "??") {
+      status = "untracked";
+    } else if (xy[0] === "R" || xy[1] === "R") {
+      status = "renamed";
+    } else if (xy[0] === "D" || xy[1] === "D") {
+      status = "deleted";
+    } else if (xy[0] === "A" || xy[1] === "A") {
+      status = "added";
+    } else {
+      status = "modified";
+    }
+
+    let additions: number | null = numstatMap.get(filePath)?.additions ?? null;
+    let deletions: number | null = numstatMap.get(filePath)?.deletions ?? null;
+
+    // For untracked files, count their lines as additions
+    if (status === "untracked" && additions === null) {
+      try {
+        const fullPath = path.join(codebasePath, filePath);
+        const content = fs.readFileSync(fullPath, "utf-8");
+        additions = content.split("\n").length;
+        deletions = 0;
+      } catch {
+        // binary or unreadable
+      }
+    }
+
+    files.push({ path: filePath, status, additions, deletions });
+  }
+
+  const totalAdditions = files.reduce((s, f) => s + (f.additions ?? 0), 0);
+  const totalDeletions = files.reduce((s, f) => s + (f.deletions ?? 0), 0);
+  return {
+    files,
+    totalAdditions,
+    totalDeletions,
+    modifiedCount: files.filter((f) => f.status === "modified").length,
+    addedCount: files.filter((f) => f.status === "added" || f.status === "untracked").length,
+    deletedCount: files.filter((f) => f.status === "deleted").length,
+  };
+}
 
 export async function runScenario(scenario: Scenario): Promise<Omit<RunResult, "evaluation" | "sensors">> {
   const codebasePath = path.resolve(scenario.codebasePath);
@@ -105,6 +173,7 @@ export async function runScenario(scenario: Scenario): Promise<Omit<RunResult, "
 
   const endTime = Date.now();
   const stats = session.getSessionStats();
+  const gitChanges = collectGitChanges(codebasePath);
   session.dispose();
 
   return {
@@ -120,5 +189,6 @@ export async function runScenario(scenario: Scenario): Promise<Omit<RunResult, "
     conversation: session.agent.state.messages,
     tokenUsage: stats.tokens,
     contextUsage: stats.contextUsage,
+    gitChanges,
   };
 }

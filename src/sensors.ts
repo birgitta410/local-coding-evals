@@ -28,9 +28,8 @@ function readState(codebasePath: string): Record<string, SensorReading> | null {
   if (!stateFile) return null;
   try {
     const raw = JSON.parse(fs.readFileSync(stateFile, "utf-8")) as {
-      runners: Record<string, { status: string; reading: SensorReading & { formatted?: unknown; findings?: unknown; guidance?: unknown; extra?: unknown } }>;
+      runners: Record<string, { status: string; reading: SensorReading & { formatted?: unknown; guidance?: unknown; extra?: unknown } }>;
     };
-    // Store only the fields we care about, dropping verbose nested data
     return Object.fromEntries(
       Object.entries(raw.runners).map(([name, runner]) => [
         name,
@@ -39,6 +38,7 @@ function readState(codebasePath: string): Record<string, SensorReading> | null {
           summary: runner.reading.summary,
           score: runner.reading.score,
           metrics: runner.reading.metrics,
+          findings: runner.reading.findings ?? [],
         } satisfies SensorReading,
       ])
     );

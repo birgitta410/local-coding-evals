@@ -376,12 +376,7 @@ async function main() {
       .slice(0, 19);
     const outFile = path.join(resultsDir, `${scenario.name.replace(/\s+/g, "-")}_${ts}.json`);
 
-    // Collect changed files from the final git status (after all git ops).
-    const changedFiles = postTaskGit.summary
-      ? postTaskGit.summary.split("\n").map((l) => l.trim()).filter(Boolean)
-      : [];
-
-    const preliminary: RunResult = { ...partial, changedFiles, sensors: sensorsWithAfter };
+    const preliminary: RunResult = { ...partial, sensors: sensorsWithAfter };
     fs.writeFileSync(outFile, JSON.stringify(preliminary, null, 2));
     console.log(`\nPreliminary result saved: ${outFile}`);
 

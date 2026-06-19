@@ -37,11 +37,22 @@ export interface EvalResult {
   toolCalls: ToolCall[];
 }
 
+export interface SensorFinding {
+  message: string;
+  severity: string;
+  file: string | null;
+  line: number | null;
+  column: number | null;
+  rule: string | null;
+  context: string | null;
+}
+
 export interface SensorReading {
   status: string;
   summary: string;
   score: { value: number; direction: string; description: string; threshold: number | null };
   metrics: Array<{ key: string; label: string; value: number; unit: string | null; direction: string; threshold: number | null }>;
+  findings: SensorFinding[];
 }
 
 export interface SensorsData {
@@ -78,6 +89,22 @@ export interface ContextUsage {
   percent: number | null;
 }
 
+export interface GitFileChange {
+  path: string;
+  status: "modified" | "added" | "deleted" | "renamed" | "untracked";
+  additions: number | null;
+  deletions: number | null;
+}
+
+export interface GitChangeSummary {
+  files: GitFileChange[];
+  totalAdditions: number;
+  totalDeletions: number;
+  modifiedCount: number;
+  addedCount: number;
+  deletedCount: number;
+}
+
 export interface RunResult {
   scenarioName: string;
   codebasePath: string;
@@ -90,7 +117,7 @@ export interface RunResult {
   taskModelConfig?: LmStudioModelConfig;
   evaluatorModel: ModelSpec;
   conversation: unknown[];
-  changedFiles?: string[];
+  gitChanges?: GitChangeSummary;
   tokenUsage?: TokenUsage;
   contextUsage?: ContextUsage;
   evaluation?: EvalResult;

@@ -157,10 +157,20 @@ function renderSensors(sensors) {
     }
 
     const beforeSummary = before ? esc(before.summary) : `<span style="color:#94a3b8">no baseline</span>`;
+
+    const findings = after.findings ?? [];
+    const findingsEl = findings.length > 0
+      ? `<ul class="sensor-findings">${findings.map(f => {
+          const loc = f.file ? `${esc(f.file)}${f.line != null ? `:${f.line}` : ""}${f.column != null ? `:${f.column}` : ""}` : "";
+          const rule = f.rule ? `<span class="sensor-finding-rule">${esc(f.rule)}</span> ` : "";
+          return `<li class="sensor-finding ${esc(f.severity)}">${rule}${esc(f.message)}${loc ? ` <span class="sensor-finding-loc">${loc}</span>` : ""}</li>`;
+        }).join("")}</ul>`
+      : "";
+
     return `<tr>
       <td><span class="runner-name">${esc(name)}</span></td>
       <td>${statusEl}</td>
-      <td>${esc(after.summary)}</td>
+      <td>${esc(after.summary)}${findingsEl}</td>
       <td>${beforeSummary}</td>
       <td>${deltaEl}</td>
     </tr>`;
