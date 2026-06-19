@@ -41,9 +41,10 @@ async function run() {
   // Give charts time to render
   await page.waitForTimeout(2000);
 
-  // Scroll down until the bar chart heading is visible
-  const chartHeading = page.getByText(/messages per poster/i);
-  await chartHeading.scrollIntoViewIfNeeded();
+  // Scroll down until the bar chart is visible
+  const chart = page.locator('[data-testid="chart-posting-per-person"]');
+  await chart.waitFor();
+  await chart.scrollIntoViewIfNeeded();
 
   // A bit more padding so the full chart is visible
   await page.evaluate(() => window.scrollBy(0, 200));
