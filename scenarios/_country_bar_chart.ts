@@ -28,7 +28,8 @@ We will only have to read and change this one file, don't worry about the rest o
   Screenshot saved: /path/to/screenshot/country-chart-2026-06-18T15-05-04-993Z.png 
 - You do NOT need to use the playwright tool yourself, just run that script, that should give you the screenshot!
 - Read the screenshot file and look at the visual and see that it is displayed well, that the bars are contained in their visual area and not overlapping other elements, that the countries are sorted by number of requests, and that the chart is horizontal, not vertical.
-- Check that we only see the top 10 countries, and that the last bar says "Other". "Other" is expected to be quite long, if it is very small, that would be a smell that the implementation didn't properly work for that bar.
+- Check that we only see the top 10 countries, and that the very last bar says "Other" (Other shouldn't be part of the sorting order, we asked to have it placed at the bottom always)
+- "Other" is expected to be quite long, if it is very small, that would be a smell that the implementation didn't properly work for that bar.
 `.trim(),
 
 };
