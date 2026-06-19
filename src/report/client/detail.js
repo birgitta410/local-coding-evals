@@ -259,6 +259,10 @@ function selectRun(index) {
       <div style="margin-bottom:16px; padding:12px 16px; background:${pass ? "#f0fdf4" : "#fef2f2"}; border-radius:8px; border:1px solid ${pass ? "#bbf7d0" : "#fecaca"}; line-height:1.65; color:#334155">
         ${r._reasoningHtml ?? "No reasoning provided."}
       </div>
+      ${r.evaluation?.toolCallQuality ? `<div style="margin-bottom:16px; padding:12px 16px; background:#f8fafc; border-radius:8px; border:1px solid #e2e8f0; line-height:1.65; color:#334155">
+        <div style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#64748b; margin-bottom:6px">Tool Call Quality</div>
+        ${esc(r.evaluation.toolCallQuality)}
+      </div>` : ""}
       ${section("Evaluator Tool Calls", renderToolCalls(r.evaluation?.toolCalls), false)}
     `)}
 

@@ -35,6 +35,7 @@ export interface EvalResult {
   screenshots?: string[];
   evaluatorModel: ModelSpec;
   toolCalls: ToolCall[];
+  toolCallQuality?: string;
 }
 
 export interface SensorFinding {

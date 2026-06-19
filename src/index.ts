@@ -385,7 +385,7 @@ async function main() {
 
     console.log("\n--- evaluating ---\n");
 
-    const evaluation = await evaluate(scenario);
+    const evaluation = await evaluate(scenario, partial.conversation);
 
     // All resources have been captured and evaluation is complete — run cleanup
     // now so that git, mcp, and sensors are fully restored before we finish.
@@ -453,14 +453,17 @@ async function main() {
 
   console.log("\n--- evaluating ---\n");
 
-  const evaluation = await evaluate(scenario);
+  const existingForEval = evalTargetFile
+    ? (JSON.parse(fs.readFileSync(evalTargetFile, "utf-8")) as RunResult)
+    : null;
+  const evaluation = await evaluate(scenario, existingForEval?.conversation ?? []);
 
   const verdict = evaluation.passed ? "PASS" : "FAIL";
   console.log(`\n${verdict}  score=${evaluation.score.toFixed(2)}`);
   console.log(`Reasoning: ${evaluation.reasoning}`);
 
   if (evalTargetFile) {
-    const existing = JSON.parse(fs.readFileSync(evalTargetFile, "utf-8")) as RunResult;
+    const existing = existingForEval!;
     const updated: RunResult = { ...existing, evaluation };
     fs.writeFileSync(evalTargetFile, JSON.stringify(updated, null, 2));
     console.log(`\nUpdated: ${evalTargetFile}`);
