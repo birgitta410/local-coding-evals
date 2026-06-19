@@ -119,5 +119,6 @@ export async function runScenario(scenario: Scenario): Promise<Omit<RunResult, "
     evaluatorModel: scenario.evaluatorModel,
     conversation: session.agent.state.messages,
     tokenUsage: stats.tokens,
+    contextUsage: stats.contextUsage,
   };
 }

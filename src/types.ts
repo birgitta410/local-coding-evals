@@ -72,6 +72,12 @@ export interface TokenUsage {
   total: number;
 }
 
+export interface ContextUsage {
+  tokens: number | null;
+  contextWindow: number;
+  percent: number | null;
+}
+
 export interface RunResult {
   scenarioName: string;
   codebasePath: string;
@@ -86,6 +92,7 @@ export interface RunResult {
   conversation: unknown[];
   changedFiles?: string[];
   tokenUsage?: TokenUsage;
+  contextUsage?: ContextUsage;
   evaluation?: EvalResult;
   sensors: SensorsData;
 }
