@@ -25,10 +25,13 @@ function collectGitChanges(codebasePath: string): GitChangeSummary {
     });
   }
 
+  const IGNORED = new Set([".mcp.json"]);
+
   const files: GitFileChange[] = [];
   for (const line of statusLines) {
     const xy = line.slice(0, 2);
     const filePath = line.slice(3);
+    if (IGNORED.has(path.basename(filePath))) continue;
     let status: GitFileChange["status"];
     if (xy === "??") {
       status = "untracked";

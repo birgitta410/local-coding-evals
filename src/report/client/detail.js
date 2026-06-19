@@ -220,6 +220,14 @@ function selectRun(index) {
           <span><strong>Run at</strong> ${esc(date)}</span>
           <span><strong>Codebase</strong> ${esc(r.codebasePath)}</span>
         </div>
+        ${r.gitChanges ? `<div class="stats" style="margin-top:6px">
+          <span><strong>Files changed</strong> ${r.gitChanges.files.length} (${[
+            r.gitChanges.modifiedCount ? r.gitChanges.modifiedCount + " modified" : "",
+            r.gitChanges.addedCount ? r.gitChanges.addedCount + " added" : "",
+            r.gitChanges.deletedCount ? r.gitChanges.deletedCount + " deleted" : "",
+          ].filter(Boolean).join(", ")}): ${r.gitChanges.files.filter(f => f.status === "modified" || f.status === "added" || f.status === "untracked").map(f => esc(f.path)).join(", ")}</span>
+          <span><strong>Lines</strong> <span style="color:#16a34a">+${r.gitChanges.totalAdditions}</span> <span style="color:#dc2626">-${r.gitChanges.totalDeletions}</span></span>
+        </div>` : ""}
       </div>
     </div>
 

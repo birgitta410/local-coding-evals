@@ -143,9 +143,10 @@ async function main() {
   const taskModelOverride = parseModelFlag("--task-model", process.argv);
   const evaluatorModelOverride = parseModelFlag("--evaluator-model", process.argv);
   const codebasePathOverride = parseStringFlag("--codebase-path", process.argv);
+  const gitShaOverride = parseStringFlag("--git-sha", process.argv);
 
   if (!scenarioPath) {
-    console.error("Usage: tsx src/index.ts <path-to-scenario.ts> [--eval-only] [--task-model provider/model] [--evaluator-model provider/model] [--codebase-path path]");
+    console.error("Usage: tsx src/index.ts <path-to-scenario.ts> [--eval-only] [--task-model provider/model] [--evaluator-model provider/model] [--codebase-path path] [--git-sha sha]");
     process.exit(1);
   }
 
@@ -155,12 +156,14 @@ async function main() {
     ...(taskModelOverride && { taskModel: { ...scenarioBase.taskModel, ...taskModelOverride } }),
     ...(evaluatorModelOverride && { evaluatorModel: { ...scenarioBase.evaluatorModel, ...evaluatorModelOverride } }),
     ...(codebasePathOverride && { codebasePath: codebasePathOverride }),
+    ...(gitShaOverride && { gitSha: gitShaOverride }),
   };
 
   console.log(`\n=== ${scenario.name} ===`);
   console.log(`Codebase : ${scenario.codebasePath}${codebasePathOverride ? " (overridden)" : ""}`);
   console.log(`Task     : ${scenario.taskModel.provider}/${scenario.taskModel.model}${taskModelOverride ? " (overridden)" : ""}`);
   console.log(`Evaluator: ${scenario.evaluatorModel.provider}/${scenario.evaluatorModel.model}${evaluatorModelOverride ? " (overridden)" : ""}`);
+  if (scenario.gitSha) console.log(`Git SHA  : ${scenario.gitSha}${gitShaOverride ? " (overridden)" : ""}`);
   if (evalOnly) console.log(`Mode     : eval-only (skipping task execution)`);
 
   const codebasePath = path.resolve(scenario.codebasePath);
