@@ -47,7 +47,7 @@ function renderScenarioOverview(scenarioName) {
     r._tok    = r.data.tokenUsage?.total    ?? 0;
     r._tokIn  = r.data.tokenUsage?.input    ?? 0;
     r._tokOut = r.data.tokenUsage?.output   ?? 0;
-    r._ctx    = r.data.contextUsage?.percent ?? null;
+    r._ctx    = r.data.contextUsage?.tokens  ?? null;
     r._score  = r.data.evaluation?.score    ?? 0;
     r._pass   = r.data.evaluation?.passed   ?? false;
   });
@@ -94,7 +94,7 @@ function renderScenarioOverview(scenarioName) {
     { v: fmt(maxDur),                          label: "Slowest" },
     { v: avgT.toFixed(1),                      label: "Avg Turns" },
     ...(avgTok > 0 ? [{ v: Math.round(avgTok).toLocaleString(), label: "Avg Tokens" }]  : []),
-    ...(avgCtx > 0 ? [{ v: avgCtx.toFixed(1) + "%",            label: "Avg Ctx Fill" }] : []),
+    ...(avgCtx > 0 ? [{ v: Math.round(avgCtx).toLocaleString(), label: "Avg Ctx Tokens" }] : []),
   ];
 
   function th(key, label) {
@@ -115,8 +115,10 @@ function renderScenarioOverview(scenarioName) {
     const durColor = base.length > 1
       ? (dur === minDur ? "#22c55e" : dur === maxDur ? "#ef4444" : "#3b82f6")
       : "#3b82f6";
-    const ctxColor = ctx != null
-      ? (ctx > 80 ? "#ef4444" : ctx > 60 ? "#f59e0b" : "#22c55e")
+    const maxCtxInSet = Math.max(...base.map(r => r._ctx ?? 0));
+    const minCtxInSet = Math.min(...base.map(r => r._ctx ?? Infinity).filter(v => v !== Infinity));
+    const ctxColor = ctx != null && base.length > 1
+      ? (ctx === maxCtxInSet ? "#ef4444" : ctx === minCtxInSet ? "#22c55e" : "#3b82f6")
       : "#3b82f6";
 
     const tokCell = tok > 0
@@ -125,7 +127,7 @@ function renderScenarioOverview(scenarioName) {
       : `<span style="color:#94a3b8">—</span>`;
 
     const ctxCell = ctx != null
-      ? miniBar(ctx, maxCtx, ctxColor) + ctx.toFixed(1) + "%"
+      ? miniBar(ctx, maxCtx, ctxColor) + ctx.toLocaleString()
         + (ctxWin ? ` <span style="color:#94a3b8;font-size:10px">/ ${ctxWin.toLocaleString()}</span>` : "")
       : `<span style="color:#94a3b8">—</span>`;
 
@@ -168,7 +170,7 @@ function renderScenarioOverview(scenarioName) {
         <thead><tr>
           ${th("model","Model")}${th("date","Date")}${th("score","Result")}
           ${th("duration","Duration")}${th("turns","Turns")}${th("toolcalls","Tool Calls")}
-          ${th("tokens","Tokens")}${th("context","Context Fill")}
+          ${th("tokens","Tokens")}${th("context","Context Tokens")}
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>

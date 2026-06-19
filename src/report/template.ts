@@ -52,8 +52,8 @@ ${css}
 <div class="layout">
   <aside>
     <div class="sidebar-top">
-      <button class="group-btn active" id="btn-model" onclick="setSidebarGroup('model')">By Model</button>
-      <button class="group-btn" id="btn-scenario" onclick="setSidebarGroup('scenario')">By Scenario</button>
+      <button class="group-btn" id="btn-model" onclick="setSidebarGroup('model')">By Model</button>
+      <button class="group-btn active" id="btn-scenario" onclick="setSidebarGroup('scenario')">By Scenario</button>
     </div>
     <div id="sidebar-list"></div>
   </aside>

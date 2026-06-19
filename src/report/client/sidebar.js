@@ -2,7 +2,7 @@
 // Note: selectedOverviewScenario and scenarioGroupKeys are also used by overview.js,
 // which is concatenated after this file.
 
-let currentGroupBy = "model";
+let currentGroupBy = "scenario";
 let selectedRunIndex = -1;
 let selectedOverviewScenario = null;
 let scenarioGroupKeys = [];
