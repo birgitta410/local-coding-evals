@@ -137,6 +137,12 @@ function parseStringFlag(flag: string, argv: string[]): string | null {
   return value;
 }
 
+function parseTagsFlag(argv: string[]): string[] | undefined {
+  const value = parseStringFlag("--tags", argv);
+  if (!value) return undefined;
+  return value.split(",").map((t) => t.trim()).filter(Boolean);
+}
+
 async function main() {
   const scenarioPath = process.argv[2];
   const evalOnly = process.argv.includes("--eval-only");
@@ -144,9 +150,10 @@ async function main() {
   const evaluatorModelOverride = parseModelFlag("--evaluator-model", process.argv);
   const codebasePathOverride = parseStringFlag("--codebase-path", process.argv);
   const gitShaOverride = parseStringFlag("--git-sha", process.argv);
+  const tagsOverride = parseTagsFlag(process.argv);
 
   if (!scenarioPath) {
-    console.error("Usage: tsx src/index.ts <path-to-scenario.ts> [--eval-only] [--task-model provider/model] [--evaluator-model provider/model] [--codebase-path path] [--git-sha sha]");
+    console.error("Usage: tsx src/index.ts <path-to-scenario.ts> [--eval-only] [--task-model provider/model] [--evaluator-model provider/model] [--codebase-path path] [--git-sha sha] [--tags tag1,tag2]");
     process.exit(1);
   }
 
@@ -379,7 +386,7 @@ async function main() {
       .slice(0, 19);
     const outFile = path.join(resultsDir, `${scenario.name.replace(/\s+/g, "-")}_${ts}.json`);
 
-    const preliminary: RunResult = { ...partial, sensors: sensorsWithAfter };
+    const preliminary: RunResult = { ...partial, ...(tagsOverride && { tags: tagsOverride }), sensors: sensorsWithAfter };
     fs.writeFileSync(outFile, JSON.stringify(preliminary, null, 2));
     console.log(`\nPreliminary result saved: ${outFile}`);
 
@@ -464,7 +471,7 @@ async function main() {
 
   if (evalTargetFile) {
     const existing = existingForEval!;
-    const updated: RunResult = { ...existing, evaluation };
+    const updated: RunResult = { ...existing, ...(tagsOverride && { tags: tagsOverride }), evaluation };
     fs.writeFileSync(evalTargetFile, JSON.stringify(updated, null, 2));
     console.log(`\nUpdated: ${evalTargetFile}`);
   }
