@@ -1,9 +1,10 @@
 import { AuthStorage, createAgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
 import * as path from "path";
+import * as fs from "fs";
 import { resolveModel } from "./model-resolver.js";
 import type { Scenario, EvalResult, ToolCall } from "./types.js";
 
-function buildEvalPrompt(codebasePath: string, expectation: string, evalsDirPath: string): string {
+function buildEvalPrompt(codebasePath: string, expectation: string, evalsDirPath: string, resultFilePath: string): string {
   return `You are evaluating whether a coding task was completed successfully.
 
 Working directory WORKING_DIR: ${codebasePath}
@@ -34,11 +35,18 @@ authoritative source for visual verification. As the screenshots will go into th
 codebase working directory where you will be working, when you want to read a screenshot, 
 always use an absolute path to the screenshot here under ${evalsDirPath}/results.
 
-After your investigation, output a single line of JSON in exactly this format
-(nothing else on that line):
-{"passed": true, "score": 1.0, "reasoning": "...", "screenshots": ["...absolute paths to any screenshot files generated during evaluation...", ""]}
+When you have finished your investigation, write your verdict to this file using the write tool:
+${resultFilePath}
 
-score must be a float between 0.0 and 1.0.`;
+The file must contain a single JSON object:
+{
+  "passed": true,
+  "score": 1.0,
+  "reasoning": "...",
+  "screenshots": ["...absolute paths to any screenshot files generated during evaluation..."]
+}
+
+score must be a float between 0.0 and 1.0. The screenshots array may be empty if no screenshots were taken.`;
 }
 
 const MAX_EVAL_TURNS = 100;
@@ -47,7 +55,8 @@ async function runEvalSession(
   scenario: Scenario,
   codebasePath: string,
   evalsDirPath: string,
-): Promise<{ jsonLine: string | undefined; output: string; toolCalls: ToolCall[] }> {
+  resultFilePath: string,
+): Promise<{ output: string; toolCalls: ToolCall[] }> {
   const authStorage = AuthStorage.create();
   const { model, modelRegistry } = resolveModel(scenario.evaluatorModel, authStorage);
 
@@ -103,30 +112,28 @@ async function runEvalSession(
     }
   });
 
-  await session.prompt(buildEvalPrompt(codebasePath, scenario.expectation, evalsDirPath));
+  await session.prompt(buildEvalPrompt(codebasePath, scenario.expectation, evalsDirPath, resultFilePath));
   session.dispose();
 
-  const jsonLine = output
-    .split("\n")
-    .map((l) => l.trim())
-    .find((l) => l.startsWith('{"passed"'));
-
-  return { jsonLine, output, toolCalls };
+  return { output, toolCalls };
 }
 
 export async function evaluate(scenario: Scenario): Promise<EvalResult> {
   const codebasePath = path.resolve(scenario.codebasePath);
   const evalsDirPath = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+  const resultFilePath = path.join(evalsDirPath, "results", `eval-verdict-${Date.now()}.json`);
 
-  let { jsonLine, output, toolCalls } = await runEvalSession(scenario, codebasePath, evalsDirPath);
+  const { output, toolCalls } = await runEvalSession(scenario, codebasePath, evalsDirPath, resultFilePath);
 
-  if (!jsonLine) {
-    console.log("\n[evaluator] No JSON result found — retrying once...");
-    ({ jsonLine, output, toolCalls } = await runEvalSession(scenario, codebasePath, evalsDirPath));
-  }
-
-  if (jsonLine) {
-    const parsed = JSON.parse(jsonLine) as { passed: boolean; score: number; reasoning: string; screenshots?: string[] };
+  if (fs.existsSync(resultFilePath)) {
+    const raw = fs.readFileSync(resultFilePath, "utf-8");
+    fs.unlinkSync(resultFilePath);
+    const parsed = JSON.parse(raw) as {
+      passed: boolean;
+      score: number;
+      reasoning: string;
+      screenshots?: string[];
+    };
     return {
       passed: parsed.passed,
       score: parsed.score,
@@ -141,7 +148,7 @@ export async function evaluate(scenario: Scenario): Promise<EvalResult> {
   return {
     passed: false,
     score: 0,
-    reasoning: `Evaluator did not produce parseable JSON after retry. Raw output:\n${output.slice(0, 1000)}`,
+    reasoning: `Evaluator did not write a result file. Raw output:\n${output.slice(0, 1000)}`,
     evaluatorModel: scenario.evaluatorModel,
     toolCalls,
   };
