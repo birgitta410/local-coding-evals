@@ -109,6 +109,7 @@ export interface GitChangeSummary {
 export interface RunResult {
   scenarioName: string;
   codebasePath: string;
+  tags?: string[];
   prompt: string;
   expectation: string;
   startTime: number;

@@ -206,6 +206,7 @@ function selectRun(index) {
       <div class="verdict ${pass ? "pass" : "fail"}">${pass ? "PASS" : "FAIL"}</div>
       <div class="info">
         <div class="scenario-name">${esc(r.scenarioName)}</div>
+        ${renderTags(r.tags)}
         <div class="stats">
           <span><strong>Score</strong> ${(score * 100).toFixed(0)}%</span>
           <span><strong>Duration</strong> ${fmt(r.durationMs)}</span>
@@ -214,7 +215,7 @@ function selectRun(index) {
         </div>
         <div class="stats" style="margin-top:6px">
           ${r.tokenUsage ? `<span title="Sum of all tokens sent and received across every API call in the session"><strong>Tokens used over all turns</strong> ${r.tokenUsage.total.toLocaleString()} (in: ${r.tokenUsage.input.toLocaleString()}, out: ${r.tokenUsage.output.toLocaleString()})</span>` : ""}
-          ${r.contextUsage?.tokens != null ? `<span title="How full the context window was at the end of the session — the model's peak memory footprint"><strong>Final context size</strong> ${r.contextUsage.tokens.toLocaleString()} / ${r.contextUsage.contextWindow.toLocaleString()}${r.contextUsage.percent != null ? ` (${r.contextUsage.percent.toFixed(1)}%)` : ""}</span>` : ""}
+          ${r.contextUsage?.tokens != null ? `<span title="How full the context window was at the end of the session — the model's peak memory footprint"><strong>Final context size</strong> ${r.contextUsage.tokens.toLocaleString()}${r.taskModelConfig?.loaded_instance_config?.context_length != null ? ` / ${r.taskModelConfig.loaded_instance_config.context_length.toLocaleString()} (${(r.contextUsage.tokens / r.taskModelConfig.loaded_instance_config.context_length * 100).toFixed(1)}%)` : ""}</span>` : ""}
         </div>
         <div class="stats" style="margin-top:6px">
           <span><strong>Run at</strong> ${esc(date)}</span>

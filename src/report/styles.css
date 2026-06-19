@@ -76,6 +76,23 @@ aside {
   font-weight: 700;
   letter-spacing: 0.04em;
 }
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+  margin-bottom: 2px;
+}
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
 .badge.pass { background: #dcfce7; color: #166534; }
 .badge.fail { background: #fee2e2; color: #991b1b; }
 

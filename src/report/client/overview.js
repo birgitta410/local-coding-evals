@@ -110,7 +110,7 @@ function renderScenarioOverview(scenarioName) {
     const model    = r.data.taskModel?.model    ?? "";
     const provider = r.data.taskModel?.provider ?? "";
     const date     = new Date(r.data.startTime).toLocaleString();
-    const ctxWin   = r.data.contextUsage?.contextWindow;
+    const ctxWin   = r.data.taskModelConfig?.loaded_instance_config?.context_length ?? null;
 
     const durColor = base.length > 1
       ? (dur === minDur ? "#22c55e" : dur === maxDur ? "#ef4444" : "#3b82f6")
@@ -132,10 +132,13 @@ function renderScenarioOverview(scenarioName) {
       : `<span style="color:#94a3b8">—</span>`;
 
     return `<tr class="ov-row" onclick="selectRun(${r.idx})">
-      <td><div class="ov-model" style="display:inline-flex;flex-direction:column;background:${modelColorMap.get(model).bg};border-radius:6px;padding:4px 9px;">
-        <span style="font-size:10px;color:${modelColorMap.get(model).text};opacity:0.75">${esc(provider)}</span>
-        <strong style="color:${modelColorMap.get(model).text}">${esc(model)}</strong>
-      </div></td>
+      <td>
+        <div class="ov-model" style="display:inline-flex;flex-direction:column;background:${modelColorMap.get(model).bg};border-radius:6px;padding:4px 9px;">
+          <span style="font-size:10px;color:${modelColorMap.get(model).text};opacity:0.75">${esc(provider)}</span>
+          <strong style="color:${modelColorMap.get(model).text}">${esc(model)}</strong>
+        </div>
+        ${renderTags(r.data.tags)}
+      </td>
       <td class="ov-date">${esc(date)}</td>
       <td style="white-space:nowrap">
         <span class="badge ${pass ? "pass" : "fail"}">${pass ? "PASS" : "FAIL"}</span>

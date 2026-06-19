@@ -16,6 +16,7 @@ function renderRunItem(d, i) {
   const active = i === selectedRunIndex;
   return `<div class="run-item${active ? " active" : ""}" data-index="${i}" onclick="selectRun(${i})">
     <div class="name">${esc(d.scenarioName)}</div>
+    ${renderTags(d.tags)}
     <div class="meta">
       <span class="badge ${pass ? "pass" : "fail"}">${pass ? "PASS" : "FAIL"}</span>
       <span>${(score * 100).toFixed(0)}%</span>
