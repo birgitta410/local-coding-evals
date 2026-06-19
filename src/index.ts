@@ -257,7 +257,8 @@ async function main() {
     } else if (!git.clean) {
       console.log("\n\x1b[33mWarning: codebase has uncommitted changes:\x1b[0m");
       console.log(git.summary.split("\n").map((l) => `  ${l}`).join("\n"));
-      const proceed = await confirm("\nContinue anyway? [y/N] ");
+      console.log("\n\x1b[33mIf you want a clean state, fix that first before continuing.\x1b[0m");
+      const proceed = await confirm("\nContinue [y/N] ");
       if (!proceed) {
         console.log("Aborted.");
         process.exit(0);
