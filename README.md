@@ -14,6 +14,8 @@ Vibe-coded little app that can run coding task scenarios against local models.
 
 The setup assumes and has only been tested with [LM Studio](https://lmstudio.ai/) as the model runtime. Install it and download models there.
 
+(I've also ran it a few times with Ollama, it does in theory support all providers that Pi also supports. However, collecting metadata about the loaded models is implemented for LM Studio. It just silently skips over it when it's another provider)
+
 ### Install and configure Pi
 
 For coding, the [Pi coding agent](https://pi.dev/docs/latest/quickstart) is used, make sure it is installed.

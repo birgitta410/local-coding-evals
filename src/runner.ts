@@ -1,5 +1,5 @@
 import { AuthStorage, createAgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
-import { execSync, spawnSync } from "child_process";
+import { spawnSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import { resolveModel } from "./model-resolver.js";
@@ -106,6 +106,8 @@ export async function runScenario(scenario: Scenario): Promise<Omit<RunResult, "
 
   // track whether we're mid-line inside a thinking block so we can indent continuations
   let inThinking = false;
+  const toolCallsMade: Array<{ toolName: string; args: unknown }> = [];
+  let lastResponseText = "";
 
   session.subscribe((event) => {
     if (event.type === "message_update") {
@@ -122,9 +124,11 @@ export async function runScenario(scenario: Scenario): Promise<Omit<RunResult, "
         if (inThinking) { process.stdout.write("\x1b[0m\n"); inThinking = false; }
         process.stdout.write("\n");
       } else if (e.type === "text_delta") {
+        lastResponseText += e.delta;
         process.stdout.write(e.delta);
       }
     } else if (event.type === "tool_execution_start") {
+      toolCallsMade.push({ toolName: event.toolName, args: event.args });
       process.stdout.write(`\n\x1b[33m[tool: ${event.toolName}]\x1b[0m ${JSON.stringify(event.args ?? {})}\n`);
     } else if (event.type === "tool_execution_end") {
       const result = typeof event.result === "string"
@@ -157,20 +161,29 @@ export async function runScenario(scenario: Scenario): Promise<Omit<RunResult, "
     throw new Error(`Agent prompt failed (model: ${modelSpec}): ${msg}`, { cause: err });
   }
 
-  // Check if any files were modified. If not, nudge the agent to continue.
-  let gitStatus = "";
-  try {
-    gitStatus = execSync("git status --porcelain", { cwd: codebasePath, encoding: "utf8" });
-  } catch {
-    // not a git repo or git unavailable -- skip the check
-  }
-  if (gitStatus.trim() === "") {
-    process.stdout.write("\n\x1b[33m[runner] No file changes detected -- sending follow-up prompt\x1b[0m\n");
+  // If no edit tool calls were made, nudge the agent up to 3 times.
+  // The agent can opt out early by including I_AM_DONE in its response.
+  const MAX_NO_EDIT_RETRIES = 3;
+  for (let attempt = 0; attempt < MAX_NO_EDIT_RETRIES; attempt++) {
+    if (toolCallsMade.some((t) => t.toolName === "edit")) break;
+
+    process.stdout.write(
+      `\n\x1b[33m[runner] No edit tool calls detected (attempt ${attempt + 1}/${MAX_NO_EDIT_RETRIES}) -- sending follow-up prompt\x1b[0m\n`
+    );
+    lastResponseText = "";
     try {
-      await session.prompt("You haven't changed any files, are you sure you're done? If not, please continue.");
+      await session.prompt(
+        "Looks like you haven't changed any files yet, please continue with the implementation. " +
+        "If you're done with the task and don't want to change any files, include the text I_AM_DONE in your response."
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new Error(`Follow-up prompt failed (model: ${modelSpec}): ${msg}`, { cause: err });
+    }
+
+    if (lastResponseText.includes("I_AM_DONE")) {
+      process.stdout.write(`\n\x1b[33m[runner] Model indicated it is done (I_AM_DONE)\x1b[0m\n`);
+      break;
     }
   }
 

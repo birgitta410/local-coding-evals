@@ -124,13 +124,26 @@ async function runEvalSession(
 
   let output = "";
   let turnCount = 0;
+  let inThinking = false;
   const toolCalls: ToolCall[] = [];
   const pendingCalls = new Map<string, ToolCall>();
 
   session.subscribe((event) => {
-    if (event.type === "message_update" && event.assistantMessageEvent?.type === "text_delta") {
-      output += event.assistantMessageEvent.delta;
-      process.stdout.write(event.assistantMessageEvent.delta);
+    if (event.type === "message_update") {
+      const e = event.assistantMessageEvent;
+      if (e.type === "thinking_start") {
+        inThinking = true;
+        process.stdout.write("\n\x1b[2m[thinking]\x1b[0m\n\x1b[2m");
+      } else if (e.type === "thinking_delta") {
+        process.stdout.write(e.delta);
+      } else if (e.type === "thinking_end") {
+        process.stdout.write("\x1b[0m\n");
+        inThinking = false;
+      } else if (e.type === "text_delta") {
+        if (inThinking) { process.stdout.write("\x1b[0m\n"); inThinking = false; }
+        output += e.delta;
+        process.stdout.write(e.delta);
+      }
     } else if (event.type === "agent_end") {
       turnCount++;
       if (turnCount >= MAX_EVAL_TURNS) {
@@ -139,7 +152,7 @@ async function runEvalSession(
       }
     } else if (event.type === "tool_execution_start") {
       const args = JSON.stringify(event.args ?? {});
-      process.stdout.write(`\n[tool: ${event.toolName}] ${args}\n`);
+      process.stdout.write(`\n\x1b[33m[tool: ${event.toolName}]\x1b[0m ${args}\n`);
       pendingCalls.set(event.toolCallId, {
         toolName: event.toolName,
         args: event.args,
@@ -151,8 +164,8 @@ async function runEvalSession(
         ? event.result.slice(0, 300)
         : JSON.stringify(event.result ?? "").slice(0, 300);
       const suffix = result.length === 300 ? "..." : "";
-      const label = event.isError ? "error" : "ok";
-      process.stdout.write(`[${label}] ${result}${suffix}\n`);
+      const label = event.isError ? "\x1b[31m[error]\x1b[0m" : "\x1b[32m[ok]\x1b[0m";
+      process.stdout.write(`${label} ${result}${suffix}\n`);
       const call = pendingCalls.get(event.toolCallId);
       if (call) {
         call.result = event.result;

@@ -107,6 +107,79 @@ async function fetchLmStudioModelConfig(
   }
 }
 
+async function fetchOllamaModelConfig(
+  baseUrl: string,
+  modelId: string
+): Promise<LmStudioModelConfig | null> {
+  const url = `${baseUrl}/api/show`;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: modelId }),
+    });
+    if (!res.ok) {
+      console.log(`[ollama] HTTP ${res.status} ${res.statusText} from ${url}`);
+      return null;
+    }
+    const data = (await res.json()) as any;
+
+    // Architecture-prefixed key, e.g. "llama.context_length", "qwen2.context_length"
+    const modelInfo: Record<string, unknown> = data.model_info ?? {};
+    let max_context_length: number | null = null;
+    for (const [key, value] of Object.entries(modelInfo)) {
+      if (key.endsWith(".context_length") && typeof value === "number") {
+        max_context_length = value;
+        break;
+      }
+    }
+
+    // num_ctx in the parameters string is the effective configured context length
+    let configured_context_length: number | null = null;
+    if (typeof data.parameters === "string") {
+      const m = data.parameters.match(/num_ctx\s+(\d+)/);
+      if (m) configured_context_length = parseInt(m[1], 10);
+    }
+
+    const details: Record<string, unknown> = data.details ?? {};
+    const params_string = typeof details.parameter_size === "string" ? details.parameter_size : null;
+    const quantName = typeof details.quantization_level === "string" ? details.quantization_level : null;
+
+    // Derive bits_per_weight from the leading number in e.g. "Q4_K_M", "F16"
+    let bits_per_weight: number | null = null;
+    if (quantName) {
+      const m = quantName.match(/^[A-Z](\d+)/i);
+      if (m) bits_per_weight = parseInt(m[1], 10);
+    }
+
+    if (max_context_length === null) {
+      console.log(`[ollama] Model "${modelId}" found but context_length not available in model_info`);
+    }
+
+    return {
+      max_context_length: max_context_length ?? 0,
+      params_string,
+      quantization: quantName ? { name: quantName, bits_per_weight } : null,
+      loaded_instance_config: { context_length: configured_context_length ?? max_context_length ?? 0 },
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log(`[ollama] Failed to fetch model config from ${url}: ${msg}`);
+    return null;
+  }
+}
+
+async function fetchModelConfig(
+  baseUrl: string,
+  provider: string,
+  modelId: string
+): Promise<LmStudioModelConfig | null> {
+  if (provider.toLowerCase().includes("ollama")) {
+    return fetchOllamaModelConfig(baseUrl, modelId);
+  }
+  return fetchLmStudioModelConfig(baseUrl, modelId);
+}
+
 function parseModelFlag(flag: string, argv: string[]): Partial<ModelSpec> | null {
   const idx = argv.indexOf(flag);
   if (idx === -1) return null;
@@ -178,9 +251,9 @@ async function main() {
   const lmStudioBaseUrl = scenario.taskModel.baseUrl
     ?? readPiProviderBaseUrl(scenario.taskModel.provider);
   if (!lmStudioBaseUrl) {
-    console.log("[lmstudio] Warning: baseUrl not set in scenario and provider not found in ~/.pi/agent/models.json, cannot request model config");
+    console.log("[model] Warning: baseUrl not set in scenario and provider not found in ~/.pi/agent/models.json, cannot request model config");
   } else if (!scenario.taskModel.baseUrl) {
-    console.log(`[lmstudio] baseUrl resolved from Pi config for provider "${scenario.taskModel.provider}": ${lmStudioBaseUrl}`);
+    console.log(`[model] baseUrl resolved from Pi config for provider "${scenario.taskModel.provider}": ${lmStudioBaseUrl}`);
   }
 
   let partial: Omit<RunResult, "evaluation" | "sensors">;
@@ -339,13 +412,13 @@ async function main() {
 
     let taskModelConfig: LmStudioModelConfig | undefined;
     if (lmStudioBaseUrl) {
-      const config = await fetchLmStudioModelConfig(lmStudioBaseUrl, scenario.taskModel.model);
+      const config = await fetchModelConfig(lmStudioBaseUrl, scenario.taskModel.provider, scenario.taskModel.model);
       if (config) {
         taskModelConfig = config;
         const ctxLen = config.loaded_instance_config?.context_length ?? "not loaded";
-        console.log(`[lmstudio] context_length=${ctxLen} max_context_length=${config.max_context_length} params=${config.params_string ?? "?"}`);
+        console.log(`[model] context_length=${ctxLen} max_context_length=${config.max_context_length} params=${config.params_string ?? "?"}`);
       } else {
-        console.log("[lmstudio] Could not fetch model config (non-LM Studio runtime or API unavailable)");
+        console.log("[model] Could not fetch model config (API unavailable)");
       }
     }
     partial = { ...partial, taskModelConfig };
