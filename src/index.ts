@@ -25,6 +25,17 @@ function confirm(question: string): Promise<boolean> {
   });
 }
 
+function confirmDefaultYes(question: string): Promise<boolean> {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      const trimmed = answer.trim().toLowerCase();
+      resolve(trimmed === "" || trimmed.startsWith("y"));
+    });
+  });
+}
+
 function checkGitState(codebasePath: string): { clean: boolean; summary: string } {
   const result = spawnSync("git", ["status", "--porcelain"], {
     cwd: codebasePath,
@@ -246,6 +257,10 @@ async function main() {
   if (scenario.gitSha) console.log(`Git SHA  : ${scenario.gitSha}${gitShaOverride ? " (overridden)" : ""}`);
   if (evalOnly) console.log(`Mode     : eval-only (skipping task execution)`);
 
+  const reasoningOn = await confirmDefaultYes("Is reasoning on? [Y/n] ");
+  const tags: string[] = [...(tagsOverride ?? [])];
+  if (!reasoningOn) tags.push("no-reasoning");
+
   const codebasePath = path.resolve(scenario.codebasePath);
 
   const lmStudioBaseUrl = scenario.taskModel.baseUrl
@@ -459,7 +474,7 @@ async function main() {
       .slice(0, 19);
     const outFile = path.join(resultsDir, `${scenario.name.replace(/\s+/g, "-")}_${ts}.json`);
 
-    const preliminary: RunResult = { ...partial, ...(tagsOverride && { tags: tagsOverride }), sensors: sensorsWithAfter };
+    const preliminary: RunResult = { ...partial, ...(tags.length > 0 && { tags }), sensors: sensorsWithAfter };
     fs.writeFileSync(outFile, JSON.stringify(preliminary, null, 2));
     console.log(`\nPreliminary result saved: ${outFile}`);
 
@@ -544,7 +559,7 @@ async function main() {
 
   if (evalTargetFile) {
     const existing = existingForEval!;
-    const updated: RunResult = { ...existing, ...(tagsOverride && { tags: tagsOverride }), evaluation };
+    const updated: RunResult = { ...existing, ...(tags.length > 0 && { tags }), evaluation };
     fs.writeFileSync(evalTargetFile, JSON.stringify(updated, null, 2));
     console.log(`\nUpdated: ${evalTargetFile}`);
   }
